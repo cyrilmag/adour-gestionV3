@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% set _total = (total or 0)|int %}
+{% set _start = (count_start or 0)|int %}
+{% set _end = (count_end or 0)|int %}
+{% set _page = (page or 1)|int %}
+{% set _page_count = (page_count or 0)|int %}
+
+{% block title %}Interventions XML{% endblock %}
+{% block content %}
+<h1>Interventions XML</h1>
+<div class="flex items-center gap-3 mb-2">
+  <span class="badge">
+    Résultats&nbsp;: <strong>{{ _total }}</strong> ligne{% if _total != 1 %}s{% endif %}
+    {% if _total > 0 %} &nbsp;—&nbsp; affichage {{ _start }}–{{ _end }}{% endif %}
+  </span>
+  <span class="text-sm text-muted">
+    (page {{ _page }}, {{ _page_count }} élément{% if _page_count != 1 %}s{% endif %})
+  </span>
+  {% if atelier_selected|default([])|length > 0 %}
+    <span class="text-sm text-muted">• Atelier : {{ (atelier_selected|default([]))|join(", ") }}</span>
+  {% endif %}
+  {% if filters|default({})|length > 0 %}
+    <span class="text-sm text-muted">• Filtres :
+      {% for k, v in filters.items() %}
+        {{ k }}={{ v }}{% if not loop.last %}, {% endif %}
+      {% endfor %}
+    </span>
+  {% endif %}
+</div>
+
+
+<style>
+  .badge{
+    display:inline-block;padding:.25rem .5rem;border-radius:.5rem;
+    background:#eef2ff;border:1px solid #c7d2fe;
+  }
+  .text-muted{color:#6b7280}
+</style>
+
+<form method="get" action="/interventions-xml" class="card" style="margin-bottom:12px">
+  <h2>Filtrer par Atelier</h2>
+  {% if atelier_values and atelier_values|length > 0 %}
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+      <label style="display:flex; gap:6px; align-items:center;">
+        <input type="checkbox" id="check_all_ateliers">
+        <span><strong>Tout sélectionner</strong></span>
+      </label>
+      {% for a in atelier_values %}
+        <label style="display:flex; gap:6px; align-items:center;">
+          <input type="checkbox" name="atelier" value="{{ a }}" class="ck-atelier"
+                 {% if a in atelier_selected %}checked{% endif %}>
+          <span>{{ a }}</span>
+        </label>
+      {% endfor %}
+      <button class="btn" type="submit">Appliquer</button>
+      {% if atelier_selected and atelier_selected|length > 0 %}
+        <a class="btn btn-secondary" href="/interventions-xml">Réinitialiser</a>
+      {% endif %}
+    </div>
+  {% else %}
+    <p class="muted">Aucune valeur d'atelier trouvée (importe un XML ou vérifie le nom de colonne).</p>
+  {% endif %}
+</form>
+
+<section class="card">
+  <h2>Résultats</h2>
+
+  <form method="get" action="/interventions-xml">
+    {# conserver les ateliers cochés #}
+    {% for a in atelier_selected %}
+      <input type="hidden" name="atelier" value="{{ a }}">
+    {% endfor %}
+
+    {# état de la pagination/tri #}
+    <input type="hidden" name="page" value="{{ page }}">
+    <input type="hidden" name="page_size" value="{{ page_size }}">
+    <input type="hidden" name="sort_col" value="{{ sort_col or '' }}">
+    <input type="hidden" name="sort_dir" value="{{ sort_dir or 'asc' }}">
+
+    {# -----------------------------
+       En-tête harmonisée (asc/desc) + barre de scroll haut
+       ----------------------------- #}
+    {% set sc = sort_col or '' %}
+    {% set sd = sort_dir or 'asc' %}
+
+    {% macro sort_link(real_col) -%}
+      {%- if not real_col -%}#{%- else -%}
+        {{ request.url.path }}?page={{ page }}&page_size={{ page_size }}
+        {%- for a in atelier_selected %}&atelier={{ a | urlencode }}{% endfor -%}
+        {%- for k,v in filters.items() %}{% if v %}&c_{{ k | urlencode }}={{ v | urlencode }}{% endif %}{% endfor -%}
+        &sort_col={{ real_col | urlencode }}&sort_dir={{ 'desc' if sc==real_col and sd=='asc' else 'asc' }}
+      {%- endif -%}
+    {%- endmacro %}
+
+    <div class="table-area">
+      <div class="hscroll-top" data-hscroll-top></div>
+      <div class="table-wrapper" data-table-wrapper>
+
+        <table class="table clickable-rows" class="app-table">
+          <thead>
+            <tr>
+              <th><a href="{{ sort_link(cols_real.date) or '#' }}">{{ labels.date }}</a></th>
+              <th><a href="{{ sort_link(cols_real.numero) or '#' }}">{{ labels.num_short }}</a></th>
+              <th><a href="{{ sort_link(cols_real.nom) or '#' }}">{{ labels.nom }}</a></th>
+              <th><a href="{{ sort_link(cols_real.libcourt) or '#' }}">{{ labels.libcourt }}</a></th>
+              <th><a href="{{ sort_link(cols_real.notes) or '#' }}">{{ labels.notes }}</a></th>
+              <th><a href="{{ sort_link(cols_real.cession) or '#' }}">{{ labels.cession }}</a></th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for r in rows %}
+              <tr data-href="/interventions-xml/item/{{ r._rowid | urlencode }}">
+                <td>{{ r.date or "" }}</td>
+                <!-- <td>{{ r.num_base or "" }}</td> -->
+                <td>{{ r.num_short or "" }}</td>
+                <td>{{ r.nom or "" }}</td>
+                <td>{{ r.libcourt or "" }}</td>
+                <td>{{ r.notes or "" }}</td>
+                <td>{{ r.cession or "" }}</td>
+              </tr>
+            {% endfor %}
+            {% if not rows or rows|length == 0 %}
+              <tr><td colspan="6" class="muted">Aucune donnée à afficher.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+
+      </div><!-- /.table-wrapper -->
+    </div><!-- /.table-area -->
+
+    <div class="flex gap-2" style="margin-top:8px">
+      {% set last_page = (total // page_size) + (1 if total % page_size else 0) %}
+      <span class="muted">Total : {{ total }}</span>
+      <div style="margin-left:auto"></div>
+      {% if page > 1 %}
+        <button class="btn btn-secondary" name="page" value="{{ page-1 }}">« Précédent</button>
+      {% endif %}
+      {% if page < last_page %}
+        <button class="btn btn-secondary" name="page" value="{{ page+1 }}">Suivant »</button>
+      {% endif %}
+    </div>
+  </form>
+</section>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // "Tout sélectionner" pour ateliers
+    const all = document.getElementById('check_all_ateliers');
+    const boxes = Array.from(document.querySelectorAll('.ck-atelier'));
+    if (all && boxes.length) {
+      function refresh() {
+        const checked = boxes.filter(b => b.checked).length;
+        all.indeterminate = checked > 0 && checked < boxes.length;
+        all.checked = checked === boxes.length;
+      }
+      all.addEventListener('change', () => { boxes.forEach(b => b.checked = all.checked); refresh(); });
+      boxes.forEach(b => b.addEventListener('change', refresh));
+      refresh();
+    }
+
+    // Lignes cliquables
+    document.querySelectorAll('table.clickable-rows tbody tr[data-href]').forEach(tr => {
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', () => {
+        const href = tr.getAttribute('data-href');
+        if (href) window.location = href;
+      });
+    });
+  });
+</script>
+{% endblock %}

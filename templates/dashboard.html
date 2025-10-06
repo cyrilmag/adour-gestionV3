@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Accueil — Tableau de bord{% endblock %}
+{% block content %}
+<h1>Tableau de bord</h1>
+{# ===== KPIs ETL en tuiles, même présentation que les autres KPIs ===== #}
+{% if etl_stats and etl_stats.run_at %}
+  <div class="kpis">
+    <div class="kpi-card">
+      <div class="kpi-label">Total lus (dernier import)</div>
+      <div class="kpi-value">{{ etl_stats.total }}</div>
+      <div class="kpi-sub">{{ etl_stats.run_at }}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Mises à jour</div>
+      <div class="kpi-value">{{ etl_stats.updated }}</div>
+      <div class="kpi-sub">{{ etl_stats.run_at }}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Insérées</div>
+      <div class="kpi-value">{{ etl_stats.inserted }}</div>
+      <div class="kpi-sub">{{ etl_stats.run_at }}</div>
+    </div>
+  </div>
+{% else %}
+  <div class="alert alert-secondary">
+    Aucune exécution de l’import encore enregistrée.
+  </div>
+{% endif %}
+
+
+<div class="kpis">
+  <div class="kpi-card">
+    <div class="kpi-label">Total à traiter</div>
+    <div class="kpi-value">{{ total_a_traiter }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">&gt; 90 jours</div>
+    <div class="kpi-value">{{ gt90 }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">&gt; 20 jours (cessions sélectionnées)</div>
+    <div class="kpi-value">{{ gt20_cession }}</div>
+  </div>
+</div>
+{# ================== Accordéon INSERTS (lignes insérées au dernier import) ================== #}
+{% if etl_stats and etl_stats.run_at %}
+<div class="accordion" id="acc-etl-inserts">
+  <button class="accordion-header" type="button" onclick="document.getElementById('acc-etl-inserts').classList.toggle('open')">
+    <span class="chevron">▶</span>
+    Interventions <span class="badge">insérées (dernier import)</span>
+    <span class="muted">— {{ etl_stats.run_at }} — clic pour afficher / masquer</span>
+  </button>
+
+  <div class="accordion-content">
+    <div class="table-wrap">
+      <table class="table table-striped table-hover table-clickable">
+        <thead>
+          <tr>
+            <th>N°</th>
+            <th>Client</th>
+            <th>Machine</th>
+            <th>Cession</th>
+            <th>Travaux (aperçu)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in etl_insert_list %}
+          <tr
+            {% if r.id %}
+              class="row-link"
+              data-href="/interventions-xml/item/{{ r.id }}"
+              tabindex="0" role="link"
+              aria-label="Ouvrir intervention {{ r.Numero }}"
+              title="Ouvrir la fiche intervention"
+              onclick="const u=this.dataset.href;if(u)window.location.assign(u)"
+              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}"
+            {% endif %}
+          >
+            <td>{{ r.Numero }}</td>
+            <td>{{ r.Client or '' }}</td>
+            <td>{{ r.Machine or '' }}</td>
+            <td>{{ r.Cession or '' }}</td>
+            <td>{{ (r.Travaux or '')[:160] }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="muted">Aucune ligne insérée au dernier import.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ================== Accordéon GT20 (garantie > 20 jours) ================== #}
+<div class="accordion" id="acc-gt20">
+  <button class="accordion-header" type="button" onclick="document.getElementById('acc-gt20').classList.toggle('open')">
+    <span class="chevron">▶</span>
+    Interventions <span class="badge">garantie &gt; 20 jours</span>
+    <span class="muted">— clic pour afficher / masquer</span>
+  </button>
+
+  <div class="accordion-content">
+    <div class="table-wrap">
+      <table class="table table-striped table-hover table-clickable">
+        <thead>
+          {% set cur_col = request.query_params.get('sort_gt20') %}
+          {% set cur_dir = (request.query_params.get('dir_gt20') or 'desc').lower() %}
+
+          {% macro th(col_key, label) -%}
+            {%- set active = (cur_col == col_key) -%}
+            {%- set nextdir = ('asc' if not active else ('desc' if cur_dir=='asc' else 'asc')) -%}
+            <th>
+              <a class="th-sort" href="{{ request.url_for('home_dashboard') }}?sort_gt20={{ col_key }}&dir_gt20={{ nextdir }}">
+                {{ label }}
+                {%- if active -%}
+                  <span class="sort-arrow">{{ '▼' if cur_dir=='desc' else '▲' }}</span>
+                {%- endif -%}
+              </a>
+            </th>
+          {%- endmacro %}
+
+          <tr>
+            {{ th('Numero', 'Numéro') }}
+            {{ th('Client', 'Client') }}
+            {# {{ th('Machine', 'Machine') }} #}
+            {{ th('DateTxt', 'Date') }}
+            {{ th('Type', 'Type') }}
+            {{ th('Cession', 'Cession') }}
+            {{ th('Jours', 'Jours') }}
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in gt20_list %}
+          <tr
+            {% if r.id %}
+              class="row-link"
+              data-href="/interventions-xml/item/{{ r.id }}"
+              tabindex="0" role="link"
+              aria-label="Ouvrir intervention {{ r.Numero }}"
+              title="Ouvrir la saisie de l'intervention"
+              onclick="const u=this.dataset.href;if(u)window.location.assign(u)"
+              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}"
+            {% endif %}
+          >
+            <td>{{ r.Numero }}</td>
+            <td>{{ r.Client }}</td>
+            {# <td>{{ r.Machine }}</td> #}
+            <td>{{ r.DateTxt }}</td>
+            <td>{{ r.Type }}</td>
+            <td>{{ r.Cession }}</td>
+            <td><strong>{{ r.Jours }}</strong></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="muted">Aucune intervention de garantie &gt; 20 jours à afficher.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# ================== Accordéon GT90 (interventions > 90 jours à traiter) ================== #}
+<div class="accordion" id="acc-gt90">
+  <button class="accordion-header" type="button" onclick="document.getElementById('acc-gt90').classList.toggle('open')">
+    <span class="chevron">▶</span>
+    Interventions <span class="badge">&gt; 90 jours (à traiter)</span>
+    <span class="muted">— clic pour afficher / masquer</span>
+  </button>
+
+  <div class="accordion-content">
+    <div class="table-wrap">
+      {% set cur_sort90 = request.query_params.get("sort_gt90") or "" %}
+      {% set cur_dir90  = (request.query_params.get("dir_gt90") or "desc").lower() %}
+
+      {% macro th90(col_key, label) -%}
+        {%- set active = (cur_sort90 == col_key) -%}
+        {%- set nextdir = ('asc' if not active else ('desc' if cur_dir90=='asc' else 'asc')) -%}
+        <th>
+          <a class="th-sort" href="{{ request.url_for('home_dashboard') }}?sort_gt90={{ col_key }}&dir_gt90={{ nextdir }}">
+            {{ label }}
+            {%- if active -%}
+              <span class="sort-arrow">{{ '▼' if cur_dir90=='desc' else '▲' }}</span>
+            {%- endif -%}
+          </a>
+        </th>
+      {%- endmacro %}
+
+      <table class="table table-striped table-hover table-clickable">
+        <thead>
+          <tr>
+            {{ th90("Numero", "N°") }}
+            {{ th90("Client", "Client") }}
+            {{ th90("Machine", "Machine") }}
+            {{ th90("DateTxt", "Date") }}
+            {{ th90("Type", "Type") }}
+            {{ th90("Cession", "Cession") }}
+            {{ th90("Jours", "Jours") }}
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in gt90_list %}
+          <tr
+            {% if r.id %}
+              class="row-link"
+              data-href="/interventions-xml/item/{{ r.id }}"
+              tabindex="0" role="link"
+              aria-label="Ouvrir intervention {{ r.Numero }}"
+              title="Ouvrir la saisie de l'intervention"
+              onclick="const u=this.dataset.href;if(u)window.location.assign(u)"
+              onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault(); this.click();}"
+            {% endif %}
+          >
+            <td>{{ r.Numero }}</td>
+            <td>{{ r.Client }}</td>
+            <td>{{ r.Machine }}</td>
+            <td>{{ r.DateTxt }}</td>
+            <td>{{ r.Type }}</td>
+            <td>{{ r.Cession }}</td>
+            <td class="text-right"><strong>{{ r.Jours }}</strong></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="muted">Aucune intervention &gt; 90 jours à traiter.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}Adour Gestion - Registres{% endblock %}</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script defer src="/static/ui.js"></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h2>Menu</h2>
+      <nav>
+        <ul>
+			<li class="{{ 'active' if request.url.path == '/' else '' }}"><a href="/">Accueil</a></li>
+      <li class="{{ 'active' if request.url.path.startswith('/interventions-xml') else '' }}"><a href="/interventions-xml">Interventions XML</a></li>
+			<li class="{{ 'active' if request.url.path.startswith('/historique/narrosse') else '' }}"><a href="/historique/narrosse">Interventions Narrosse</a></li>
+			<li class="{{ 'active' if request.url.path.startswith('/historique/peyrehorade') else '' }}"><a href="/historique/peyrehorade">Interventions Peyrehorade</a></li>
+			<li class="{{ 'active' if request.url.path.startswith('/registre-garantie') else '' }}"><a href="/registre-garantie">Registre Garantie</a></li>
+			<li class="{{ 'active' if request.url.path.startswith('/agenda') else '' }}"><a href="/agenda">Agenda</a></li>
+			<li class="{{ 'active' if request.url.path.startswith('/parametres') else '' }}"><a href="/parametres">Paramètres</a></li>
+</ul>
+      </nav>
+    </aside>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <dialog id="searchModal">
+    <form method="dialog" id="searchForm">
+      <h3>Rechercher</h3>
+      <input type="text" id="searchInput" name="q" placeholder="Texte à chercher" />
+      <div class="modal-actions">
+        <button class="btn" value="submit">Rechercher</button>
+        <button class="btn btn-secondary" value="cancel">Annuler</button>
+      </div>
+    </form>
+  </dialog>
+
+<!-- LIVE-TABLE-UI -->
+<style>
+table.app-table{width:100%;border-collapse:collapse;border:1px solid #e5e7eb;font-size:.95rem}
+table.app-table th,table.app-table td{padding:.55rem .7rem;border-bottom:1px solid #eee;vertical-align:top}
+table.app-table thead th{background:#f8fafc;font-weight:600;text-align:left;white-space:nowrap;position:sticky;top:0;z-index:1}
+.table-toolbar{display:flex;gap:.5rem;flex-wrap:wrap;margin:.25rem 0 .6rem;align-items:center}
+.table-filter-input,.table-col-input{padding:.45rem .6rem;border:1px solid #ddd;border-radius:.5rem;font-size:.95rem}
+.table-col-input{width:100%;box-sizing:border-box}
+.table-clear{padding:.45rem .7rem;border:1px solid #ddd;border-radius:.5rem;background:#fff;cursor:pointer}
+.table-clear:hover{background:#f3f4f6}
+.col-filter-row th{background:#fff}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded',() => {
+  const debouncer=(fn,ms=120)=>{let t;return (...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}};
+  const norm=(s)=> (s||'').toString().toLowerCase().normalize('NFD').replace(/\p{Diacritic}+/gu,'');
+  const enhanceTable=(table)=>{
+    if(!table || table.dataset.enhanced==="1" || table.dataset.disableFilters==="1") return;
+    table.dataset.enhanced="1";
+    table.classList.add('app-table');
+
+    const toolbar=document.createElement('div');
+    toolbar.className='table-toolbar';
+    const gInput=document.createElement('input');
+    gInput.type='search'; gInput.placeholder='Filtre global…'; gInput.className='table-filter-input';
+    const clearBtn=document.createElement('button');
+    clearBtn.type='button'; clearBtn.className='table-clear'; clearBtn.textContent='Effacer filtres';
+    toolbar.appendChild(gInput); toolbar.appendChild(clearBtn);
+    table.parentNode && table.parentNode.insertBefore(toolbar, table);
+
+    let thead=table.tHead;
+    const tbody = table.tBodies && table.tBodies[0];
+    if(!tbody) return;
+    if(!thead){
+      const firstRow = table.rows[0];
+      thead = table.createTHead();
+      if(firstRow && (firstRow.querySelector('th') || firstRow.closest('tbody')===tbody)){
+        thead.appendChild(firstRow);
+      } else {
+        const probe = tbody.rows[0];
+        const hr = thead.insertRow();
+        const count = probe ? probe.cells.length : 0;
+        for(let i=0;i<count;i++){ const th=document.createElement('th'); th.textContent='Col '+(i+1); hr.appendChild(th); }
+      }
+    }
+
+    const headerRow = thead.rows[0];
+    const cols = headerRow ? headerRow.cells.length : (table.rows[0] ? table.rows[0].cells.length : 0);
+
+    const filterRow=document.createElement('tr'); filterRow.className='col-filter-row';
+    const inputs=[];
+    for(let i=0;i<cols;i++){
+      const th=document.createElement('th');
+      const colName = headerRow && headerRow.cells[i] ? headerRow.cells[i].textContent.trim() : ('Col '+(i+1));
+      const inp=document.createElement('input');
+      inp.type='search'; inp.placeholder='Filtrer '+colName; inp.className='table-col-input'; inp.dataset.colIndex=i;
+      th.appendChild(inp); filterRow.appendChild(th); inputs.push(inp);
+    }
+    thead.appendChild(filterRow);
+
+    const bodyRows=()=> Array.from(tbody.rows).filter(r=>!r.closest('thead'));
+
+    const apply = ()=>{
+      const gq = norm(gInput.value);
+      const colq = inputs.map(i=>norm(i.value));
+      bodyRows().forEach(tr=>{
+        const rowText = norm(tr.textContent);
+        if(gq && !rowText.includes(gq)){ tr.style.display='none'; return; }
+        let ok=true;
+        for(let i=0;i<colq.length;i++){
+          const q = colq[i];
+          if(!q) continue;
+          const cell = tr.cells[i];
+          const ctext = norm(cell ? cell.textContent : '');
+          if(!ctext.includes(q)){ ok=false; break; }
+        }
+        tr.style.display = ok ? '' : 'none';
+      });
+    };
+
+    const applyDebounced = debouncer(apply, 80);
+    gInput.addEventListener('input', applyDebounced);
+    inputs.forEach(i=> i.addEventListener('input', applyDebounced));
+    clearBtn.addEventListener('click', ()=>{ gInput.value=''; inputs.forEach(i=>i.value=''); apply(); });
+  };
+
+  document.querySelectorAll('table').forEach(enhanceTable);
+  const obs=new MutationObserver(ms=>{
+    ms.forEach(m=> m.addedNodes.forEach(n=>{
+      if(n.nodeType!==1) return;
+      if(n.tagName==='TABLE') enhanceTable(n);
+      n.querySelectorAll && n.querySelectorAll('table').forEach(enhanceTable);
+    }));
+  });
+  obs.observe(document.body,{childList:true,subtree:true});
+});
+</script>
+</body>
+</html>
+

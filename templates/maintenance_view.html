@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+{% block title %}Maintenance{% endblock %}
+
+{% block content %}
+<h1>Maintenance</h1>
+
+<div class="controls" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0 12px">
+  <button type="button" id="btnCopySummary" class="btn">Copier le résumé</button>
+  {% if filename %}
+    <span class="badge">Fichier : {{ filename }}</span>
+  {% endif %}
+  {% if count %}
+    <span class="badge">Items : {{ count }}</span>
+  {% endif %}
+</div>
+<!-- Upload (DG/OR persistés via inputs cachés) -->
+<form method="post" action="/maintenance" enctype="multipart/form-data" class="cardish"
+      style="padding:10px; border:1px solid #e5e7eb; border-radius:8px; margin-bottom:12px">
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <input type="file" name="file" required class="input">
+    <button type="submit" class="btn">Téléverser &amp; analyser</button>
+  </div>
+  <input type="hidden" name="dg" id="dg_hidden" value="{{ dg or '' }}">
+  <input type="hidden" name="or" id="or_hidden" value="{{ num_or or '' }}">
+</form>
+
+<!-- Pré-notes (en-tête du résumé) -->
+<div id="preNotes" class="cardish" style="padding:10px; border:1px solid #e5e7eb; border-radius:8px; margin-bottom:12px">
+  <div class="preline" style="display:flex; align-items:center; gap:8px; margin:6px 0;">
+    <input type="checkbox" id="pre_adour_cb" {% if dg %}checked{% endif %}>
+    <label for="pre_adour_cb" style="min-width:180px">Rapport Adour N°</label>
+    <input type="text" id="pre_adour_txt" class="input" placeholder="ex : 45315" value="{{ dg or '' }}">
+  </div>
+
+  <div class="preline" style="display:flex; align-items:center; gap:8px; margin:6px 0;">
+    <input type="checkbox" id="pre_or_cb" {% if num_or %}checked{% endif %}>
+    <label for="pre_or_cb" style="min-width:180px">N° OR :</label>
+    <input type="text" id="pre_or_txt" class="input" placeholder="ex : 44832" value="{{ num_or or '' }}">
+  </div>
+
+  <!-- Combiné DG - OR (auto) -->
+  <div class="preline" style="display:flex; align-items:center; gap:8px; margin:6px 0;">
+    <input type="checkbox" id="pre_dgor_cb">
+    <label for="pre_dgor_cb" style="min-width:180px">N° DG - N° OR :</label>
+    <input type="text" id="pre_dgor_txt" class="input" placeholder="ex : 45315 - 44832" readonly>
+  </div>
+
+  <!-- Exemples d’autres pré-lignes optionnelles -->
+  <div class="preline" style="display:flex; align-items:center; gap:8px; margin:6px 0;">
+    <input type="checkbox" id="pre_mol_cb">
+    <label for="pre_mol_cb" style="min-width:180px">Rapport MOL Claas N°</label>
+    <input type="text" id="pre_mol_txt" class="input" placeholder="ex : MOL-12345">
+  </div>
+
+  <div class="preline" style="display:flex; align-items:center; gap:8px; margin:6px 0;">
+    <input type="checkbox" id="pre_sol_cb">
+    <label for="pre_sol_cb" style="min-width:180px">Rapport SOL Claas N°</label>
+    <input type="text" id="pre_sol_txt" class="input" placeholder="ex : SOL-67890">
+  </div>
+
+  <div class="preline" style="display:flex; align-items:center; gap:8px; margin:6px 0;">
+    <input type="checkbox" id="pre_hm_cb">
+    <label for="pre_hm_cb" style="min-width:180px">Échantillon huile Moteur :</label>
+    <input type="text" id="pre_hm_txt" class="input" placeholder="ex : OK / à suivre">
+  </div>
+
+  <div class="preline" style="display:flex; align-items:center; gap:8px; margin:6px 0;">
+    <input type="checkbox" id="pre_hbp_cb">
+    <label for="pre_hbp_cb" style="min-width:180px">Échantillon huile boîte / pont :</label>
+    <input type="text" id="pre_hbp_txt" class="input" placeholder="ex : OK / à suivre">
+  </div>
+
+  <div class="preline" style="display:flex; align-items:center; gap:8px; margin:6px 0;">
+    <input type="checkbox" id="pre_rev_cb">
+    <label for="pre_rev_cb" style="min-width:180px">Révision des :</label>
+    <input type="text" id="pre_rev_txt" class="input" placeholder="ex : 09/2025">
+  </div>
+</div>
+
+<!-- Aperçu -->
+{% if items %}
+  <div class="cardish" style="padding:10px; border:1px solid #e5e7eb; border-radius:8px;">
+    <h2 style="margin:0 0 8px">Aperçu</h2>
+    <table class="table" id="maintTable">
+      <thead>
+        <tr>
+          <th style="width:26px;text-align:center">
+            <input type="checkbox" id="checkAll" checked title="Tout cocher/décocher">
+          </th>
+          <th>Section</th>
+          <th>N°</th>
+          <th>Sujet</th>
+          <th>Action</th>
+          <th>PR</th>
+          <th>Désignation</th>
+          <th>Qté</th>
+          <th>Unité</th>
+          <th>Temps</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for it in items %}
+          {% if it.kind == 'title' %}
+            <tr data-kind="title">
+              <td style="text-align:center">
+                <input type="checkbox" class="row-check" checked>
+              </td>
+              <td colspan="9"><strong>{{ it.title }}</strong></td>
+            </tr>
+          {% else %}
+            <tr data-kind="task">
+              <td style="text-align:center">
+                <input type="checkbox" class="row-check" checked>
+              </td>
+              <td class="col-section">{{ it.section or '' }}</td>
+              <td>{{ it.number or '' }}</td>
+              <td class="col-subject">{{ it.subject or '' }}</td>
+              <td class="col-action">{{ it.action or '' }}</td>
+              <td>{{ it.pr or '' }}</td>
+              <td>{{ it.designation or '' }}</td>
+              <td>{{ it.quantity or '' }}</td>
+              <td>{{ it.unit or '' }}</td>
+              <td>{{ it.time or '' }}</td>
+            </tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+<textarea id="summaryBuffer" style="position:absolute; left:-9999px; top:-9999px;"></textarea>
+
+<style>
+  .cardish { background:#fff; }
+  .input { padding:6px 8px; border:1px solid #d1d5db; border-radius:6px; }
+  .btn { padding:6px 10px; background:#2563eb; color:white; border:0; border-radius:6px; cursor:pointer; }
+  .btn:hover { background:#1d4ed8; }
+  .badge { background:#eef2ff; color:#3730a3; padding:4px 8px; border-radius:999px; font-size:12px; }
+  .table { width:100%; border-collapse: collapse; }
+  .table th, .table td { border:1px solid #e5e7eb; padding:6px 8px; text-align:left; vertical-align:top; }
+  .table th:first-child, .table td:first-child { text-align:center; }
+</style>
+
+<script>
+/* Pré-remplissage initial depuis l'URL */
+(function(){
+  const sp  = new URLSearchParams(window.location.search);
+  const dg  = (sp.get('dg') || sp.get('num_dg') || '').trim();
+  const orv = (sp.get('or') || sp.get('num_or') || '').trim();
+
+  if (dg) {
+    const cb = document.getElementById('pre_adour_cb');
+    const tx = document.getElementById('pre_adour_txt');
+    if (cb) cb.checked = true;
+    if (tx && !tx.value) tx.value = dg;
+  }
+  if (orv) {
+    const cb = document.getElementById('pre_or_cb');
+    const tx = document.getElementById('pre_or_txt');
+    if (cb) cb.checked = true;
+    if (tx && !tx.value) tx.value = orv;
+  }
+})();
+
+/* Combiné DG - OR (auto) */
+(function(){
+  function updateCombined(){
+    const dg  = (document.getElementById('pre_adour_txt')?.value || '').trim();
+    const orv = (document.getElementById('pre_or_txt')?.value || '').trim();
+    const out = document.getElementById('pre_dgor_txt');
+    const cb  = document.getElementById('pre_dgor_cb');
+    if (!out) return;
+    let txt = '';
+    if (dg || orv) txt = (dg ? dg : '') + (dg && orv ? ' - ' : '') + (orv ? orv : '');
+    out.value = txt;
+    if (cb) cb.checked = !!txt;
+  }
+  document.addEventListener('DOMContentLoaded', updateCombined);
+  document.getElementById('pre_adour_txt')?.addEventListener('input', updateCombined);
+  document.getElementById('pre_or_txt')?.addEventListener('input', updateCombined);
+})();
+
+/* Propagation DG/OR vers les champs cachés à l'upload */
+(function(){
+  const form = document.querySelector('form[enctype="multipart/form-data"]');
+  if (!form) return;
+  form.addEventListener('submit', function(){
+    const dg  = document.getElementById('pre_adour_txt');
+    const orv = document.getElementById('pre_or_txt');
+    const dgH = document.getElementById('dg_hidden');
+    const orH = document.getElementById('or_hidden');
+    if (dg && dgH) dgH.value = (dg.value || '').trim();
+    if (orv && orH) orH.value = (orv.value || '').trim();
+  });
+})();
+
+/* Sélecteur global (entête) */
+(function(){
+  const tbl = document.getElementById('maintTable');
+  if (!tbl) return;
+
+  const checkAll = document.getElementById('checkAll');
+  const syncMaster = () => {
+    const rows = tbl.querySelectorAll('tbody .row-check');
+    if (!rows.length) return;
+    const allChecked = Array.from(rows).every(cb => cb.checked);
+    checkAll.checked = allChecked;
+    checkAll.indeterminate = !allChecked && Array.from(rows).some(cb => cb.checked);
+  };
+
+  if (checkAll) {
+    checkAll.addEventListener('change', () => {
+      tbl.querySelectorAll('tbody .row-check').forEach(cb => cb.checked = checkAll.checked);
+    });
+  }
+
+  tbl.addEventListener('change', (e) => {
+    if (e.target && e.target.classList.contains('row-check')) {
+      syncMaster();
+    }
+  });
+
+  // init état maître
+  syncMaster();
+})();
+
+/* Copie du résumé : regroupe par Section → Action (lignes cochées), ne prend que Section/Sujet/Action */
+(function(){
+  const btn   = document.getElementById('btnCopySummary');
+  const table = document.getElementById('maintTable');
+  if(!btn) return;
+
+  const capFirst = s => (s||'').trim().replace(/^(\p{L})/u, m => m.toUpperCase());
+
+  async function copyToClipboard(text, btnEl){
+    try{
+      await navigator.clipboard.writeText(text);
+    }catch{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } finally {
+      const old = btnEl.textContent;
+      btnEl.textContent = 'Copié ✅';
+      setTimeout(()=> btnEl.textContent = old, 1200);
+    }
+  }
+
+  function addIfChecked(cbId, label, txId, acc){
+    const on  = !!document.getElementById(cbId)?.checked;
+    const val = (document.getElementById(txId)?.value || '').trim();
+    if (on && val) acc.push(label + ' ' + val);
+  }
+
+  function readPreNotes(){
+    const lines = [];
+    // combiné prioritaire
+    const comboOn  = !!document.getElementById('pre_dgor_cb')?.checked;
+    const comboVal = (document.getElementById('pre_dgor_txt')?.value || '').trim();
+    if (comboOn && comboVal) {
+      lines.push('N° DG - N° OR : ' + comboVal);
+    } else {
+      const dgOn  = !!document.getElementById('pre_adour_cb')?.checked;
+      const dgVal = (document.getElementById('pre_adour_txt')?.value || '').trim();
+      if (dgOn && dgVal) lines.push('Rapport Adour N° ' + dgVal);
+
+      const orOn  = !!document.getElementById('pre_or_cb')?.checked;
+      const orVal = (document.getElementById('pre_or_txt')?.value || '').trim();
+      if (orOn && orVal) lines.push('N° OR : ' + orVal);
+    }
+    // autres
+    addIfChecked('pre_mol_cb', 'Rapport MOL Claas N°', 'pre_mol_txt', lines);
+    addIfChecked('pre_sol_cb', 'Rapport SOL Claas N°', 'pre_sol_txt', lines);
+    addIfChecked('pre_hm_cb',  'Échantillon huile Moteur :', 'pre_hm_txt', lines);
+    addIfChecked('pre_hbp_cb', 'Échantillon huile boîte / pont :', 'pre_hbp_txt', lines);
+    addIfChecked('pre_rev_cb', 'Révision des :', 'pre_rev_txt', lines);
+    return lines;
+  }
+
+  btn.addEventListener('click', async ()=>{
+    const rows = table ? table.querySelectorAll('tbody tr[data-kind]') : [];
+    const sectionOrder = [];
+    const bySection = new Map();         // section -> Map(actionKey -> {display, subjects[]})
+    const actionOrders = new Map();      // section -> [actionKey dans l'ordre]
+    let selectedCount = 0;
+
+    rows.forEach(tr => {
+      const cb = tr.querySelector('.row-check');
+      if (!cb || !cb.checked) return;
+
+      if (tr.getAttribute('data-kind') !== 'task') return; // on ignore les titres
+      const tds = tr.querySelectorAll('td');
+      // [0]=checkbox, [1]=Section, [2]=N°, [3]=Sujet, [4]=Action, ...
+      const section = (tds[1]?.textContent || '').trim() || 'Sans section';
+      const subject = (tds[3]?.textContent || '').trim();
+      const action  = (tds[4]?.textContent || '').trim();
+      if (!subject || !action) return;
+
+      selectedCount++;
+      if (!bySection.has(section)){
+        bySection.set(section, new Map());
+        sectionOrder.push(section);
+        actionOrders.set(section, []);
+      }
+      const aKey   = action.toLowerCase();
+      const secMap = bySection.get(section);
+      if (!secMap.has(aKey)){
+        secMap.set(aKey, { display: capFirst(action), subjects: [] });
+        actionOrders.get(section).push(aKey);
+      }
+      secMap.get(aKey).subjects.push(subject);
+    });
+
+    const infoLines = readPreNotes();
+
+    if (!selectedCount && infoLines.length === 0){
+      alert('Coche au moins une tâche (ou une pré-note) avant de copier.');
+      return;
+    }
+
+    const lines = [];
+    if (infoLines.length) lines.push(...infoLines, '');
+
+    sectionOrder.forEach(sec => {
+      if (sec !== 'Sans section') lines.push(`->${sec} :`);
+      const order = actionOrders.get(sec) || [];
+      const secMap = bySection.get(sec);
+      order.forEach(aKey => {
+        const group = secMap.get(aKey);
+        lines.push(`              ${group.display}`); // 14 espaces
+        group.subjects.forEach(sj => lines.push(sj));
+      });
+    });
+
+    await copyToClipboard(lines.join('\n'), btn);
+  });
+})();
+</script>
+
+{% endblock %}

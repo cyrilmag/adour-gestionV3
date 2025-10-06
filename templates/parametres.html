@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block title %}Paramètres{% endblock %}
+{% block content %}
+<h1>Paramètres</h1>
+
+<style>
+  details.settings { border:1px solid #eee; border-radius:10px; padding:8px 12px; margin:10px 0; }
+  details.settings > summary { cursor:pointer; font-weight:600; display:flex; align-items:center; gap:.5rem; }
+  details.settings[open] { background:#fafafa; }
+  details .section-body { margin-top:10px; }
+  .listing { width:100%; border-collapse:collapse; }
+  .listing th, .listing td { padding:8px 10px; border-bottom:1px solid #eee; text-align:left; }
+  .btn { padding:6px 10px; border:1px solid #ddd; border-radius:8px; background:#fff; cursor:pointer; }
+  .btn-secondary { background:#f7f7f7; }
+  .input, .select { padding:6px 10px; border:1px solid #ddd; border-radius:8px; }
+  .right { text-align:right; }
+</style>
+
+<!-- IMPORTS -->
+<details class="settings">
+  <summary>📥 Imports</summary>
+  <div class="section-body">
+    <div class="grid-2">
+      <div>
+        <h3>Import XML</h3>
+        <form action="/import-xml" method="post" enctype="multipart/form-data">
+          <input type="file" name="file" accept=".xml" required />
+          <button class="btn">Importer XML</button>
+        </form>
+      </div>
+      <div>
+        <h3>Import Excel</h3>
+        <form action="/import-excel" method="post" enctype="multipart/form-data">
+          <input type="file" name="file" accept=".xlsx,.xls,.csv" required />
+          <button class="btn">Importer Excel</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</details>
+
+<!-- CODES CESSION -->
+<details class="settings">
+  <summary>🏷️ Codes cession</summary>
+  <div class="section-body">
+
+    <!-- Ajout unitaire -->
+    <form class="inline" action="/parametres/cession/add" method="post" style="margin-bottom:10px;">
+      <input type="text" name="code_prefix" placeholder="Préfixe (ex: 2MAX)" class="input" required />
+      <input type="text" name="label" placeholder="Libellé (optionnel)" class="input" />
+      <button class="btn">Ajouter</button>
+    </form>
+
+    <!-- Actions groupées -->
+    <form class="inline" action="/parametres/cession/bulk" method="post" id="bulkForm">
+      <div style="display:flex; gap:8px; align-items:center; margin:8px 0 12px;">
+        <strong>Actions groupées :</strong>
+        <select name="op" id="bulkAction" class="select" required>
+          <option value="" disabled selected>Choisir une action…</option>
+          <option value="include_on">Inclure dans le KPI &gt; 20j</option>
+          <option value="include_off">Exclure du KPI &gt; 20j</option>
+          <option value="toggle_include">Basculer (inclure/exclure)</option>
+        </select>
+        <button class="btn" type="submit" id="applyBulk">Appliquer</button>
+      </div>
+
+      <table class="listing">
+        <thead>
+          <tr>
+            <th style="width:38px; text-align:center;"><input type="checkbox" id="checkAll" /></th>
+            <th>Préfixe</th>
+            <th>Libellé</th>
+            <th>Type de garantie</th>
+            <th>Type de facturation</th>
+            <th>Prise en charge &gt;20j</th>
+            <th>Actif</th>
+            <th class="right">Actions (unitaire)</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for c in cessions %}
+          <tr>
+            <td style="text-align:center;">
+              <input type="checkbox" name="prefix" value="{{ c['code_prefix'] }}" class="row-check" />
+            </td>
+            <td>{{ c["code_prefix"] }}</td>
+            <td>{{ c["label"] or "" }}</td>
+
+            <!-- Type de garantie : options dynamiques (actifs) -->
+            <td>
+              <form method="post" action="/parametres/cession/update-type" style="display:flex; gap:6px; align-items:center;">
+                <input type="hidden" name="prefix" value="{{ c['code_prefix'] }}">
+                <select name="type_garantie" class="select">
+                  <option value=""></option>
+                  {% for g in garanties_types if g.active %}
+                    <option value="{{ g.libelle }}" {{ 'selected' if c.get('type_garantie') == g.libelle else '' }}>
+                      {{ g.libelle }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-secondary" type="submit">Enregistrer</button>
+              </form>
+            </td>
+
+            <!-- Type de facturation : options dynamiques (actifs) -->
+            <td>
+              <form method="post" action="/parametres/cession/update-facturation" style="display:flex; gap:6px; align-items:center;">
+                <input type="hidden" name="prefix" value="{{ c['code_prefix'] }}">
+                <select name="type_facturation" class="select">
+                  <option value=""></option>
+                  {% for f in facturation_types if f.active %}
+                    <option value="{{ f.libelle }}" {{ 'selected' if c.get('type_facturation') == f.libelle else '' }}>
+                      {{ f.libelle }}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-secondary" type="submit">Enregistrer</button>
+              </form>
+            </td>
+
+            <td style="text-align:center">{{ "✅" if c["include_gt20"] else "❌" }}</td>
+            <td style="text-align:center">{{ "✅" if c["active"] else "❌" }}</td>
+            <td class="right" style="white-space:nowrap;">
+              <button class="btn btn-secondary" type="button" onclick="postRow('/parametres/cession/toggle-gt20-json','{{ c['code_prefix'] }}')">Toggle &gt;20j</button>
+              <button class="btn btn-secondary" type="button" onclick="postRow('/parametres/cession/toggle-active-json','{{ c['code_prefix'] }}')">Activer/Désactiver</button>
+              <button class="btn btn-danger" type="button" onclick="if(confirm('Supprimer ce code ?')) postRow('/parametres/cession/delete-json','{{ c['code_prefix'] }}')">Supprimer</button>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </form>
+  </div>
+</details>
+
+<!-- TYPES DE GARANTIE -->
+<details class="settings">
+  <summary>🧩 Types de garantie (cession_garantie)</summary>
+  <div class="section-body">
+    <form method="post" action="/parametres/garantie-type/add" style="margin:8px 0; display:flex; gap:.5rem;">
+      <input class="input" type="text" name="type_garantie" placeholder="Nouveau type de garantie…" required>
+      <button class="btn" type="submit">Ajouter</button>
+    </form>
+
+    <table class="listing">
+      <thead>
+        <tr>
+          <th style="width:50%;">Type</th>
+          <th>Remboursable</th>
+          <th>Actif</th>
+          <th style="width:260px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for g in garanties_types %}
+          <tr>
+            <td>
+              <form method="post" action="/parametres/garantie-type/rename" style="display:flex; gap:.5rem; align-items:center;">
+                <input type="hidden" name="id" value="{{ g.id }}">
+                <input class="input" type="text" name="type_garantie" value="{{ g.libelle }}" style="width:100%;">
+                <button class="btn" type="submit">Renommer</button>
+              </form>
+            </td>
+            <td>
+              <form method="post" action="/parametres/garantie-type/toggle-remboursable">
+                <input type="hidden" name="id" value="{{ g.id }}">
+                <label style="display:inline-flex; align-items:center; gap:.35rem;">
+                  <input type="checkbox" name="is_remboursable" value="1"
+                         onchange="this.form.submit()"
+                         {% if g.is_remboursable %}checked{% endif %}>
+                  Prise en charge
+                </label>
+              </form>
+            </td>
+            <td>
+              <form method="post" action="/parametres/garantie-type/toggle-active">
+                <input type="hidden" name="id" value="{{ g.id }}">
+                <button class="btn" type="submit">{{ '✅' if g.active else '❌' }}</button>
+              </form>
+            </td>
+            <td>
+              <form method="post" action="/parametres/garantie-type/delete" onsubmit="return confirm('Supprimer ce type ?');" style="display:inline;">
+                <input type="hidden" name="id" value="{{ g.id }}">
+                <button class="btn btn-secondary" type="submit">Supprimer</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        {% if not garanties_types %}
+          <tr><td colspan="4" style="opacity:.7;">Aucun type pour le moment.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<!-- TYPES DE FACTURATION -->
+<details class="settings">
+  <summary>💶 Types de facturation</summary>
+  <div class="section-body">
+    <form method="post" action="/parametres/facturation-type/add" style="margin:8px 0; display:flex; gap:.5rem;">
+      <input class="input" type="text" name="libelle" placeholder="Nouveau type de facturation…" required>
+      <button class="btn" type="submit">Ajouter</button>
+    </form>
+
+    <table class="listing">
+      <thead>
+        <tr><th style="width:60%;">Libellé</th><th>Actif</th><th style="width:260px;">Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for f in facturation_types %}
+          <tr>
+            <td>
+              <form method="post" action="/parametres/facturation-type/rename" style="display:flex; gap:.5rem; align-items:center;">
+                <input type="hidden" name="id" value="{{ f.id }}">
+                <input class="input" type="text" name="libelle" value="{{ f.libelle }}" style="width:100%;">
+                <button class="btn" type="submit">Renommer</button>
+              </form>
+            </td>
+            <td>
+              <form method="post" action="/parametres/facturation-type/toggle-active">
+                <input type="hidden" name="id" value="{{ f.id }}">
+                <button class="btn" type="submit">{{ '✅' if f.active else '❌' }}</button>
+              </form>
+            </td>
+            <td>
+              <form method="post" action="/parametres/facturation-type/delete" onsubmit="return confirm('Supprimer ce type ?');" style="display:inline;">
+                <input type="hidden" name="id" value="{{ f.id }}">
+                <button class="btn btn-secondary" type="submit">Supprimer</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        {% if not facturation_types %}
+          <tr><td colspan="3" style="opacity:.7;">Aucun type pour le moment.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</details>
+
+<script>
+  // Boutons “bulk” Codes cession
+  document.addEventListener('DOMContentLoaded', function () {
+    const checkAll = document.getElementById('checkAll');
+    const checks = Array.from(document.querySelectorAll('.row-check'));
+    const bulkForm = document.getElementById('bulkForm');
+    const bulkAction = document.getElementById('bulkAction');
+
+    function refreshState() {
+      const anyChecked = checks.some(c => c.checked);
+      const allChecked = checks.length > 0 && checks.every(c => c.checked);
+      if (checkAll) {
+        checkAll.indeterminate = !allChecked && anyChecked;
+        checkAll.checked = allChecked;
+      }
+    }
+
+    if (checkAll) {
+      checkAll.addEventListener('change', () => {
+        checks.forEach(c => c.checked = checkAll.checked);
+        refreshState();
+      });
+    }
+    checks.forEach(c => c.addEventListener('change', refreshState));
+    refreshState();
+
+    if (bulkForm) {
+      bulkForm.addEventListener('submit', (e) => {
+        const anyChecked = checks.some(c => c.checked);
+        const opOk = bulkAction && bulkAction.value;
+        if (!anyChecked || !opOk) {
+          e.preventDefault();
+          alert('Sélectionne au moins un code et une action.');
+        }
+      });
+    }
+  });
+
+  async function postRow(url, prefix) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({prefix})
+      });
+      if (!res.ok) throw new Error(await res.text());
+      location.href = '/parametres';
+    } catch (e) {
+      alert('Erreur: ' + e.message);
+    }
+  }
+</script>
+{% endblock %}

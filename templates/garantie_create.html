@@ -1,0 +1,627 @@
+{% extends "base.html" %}
+{% block title %}{{ title or "Nouvelle garantie" }}{% endblock %}
+
+{% block content %}
+<style>
+  .tabs { display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .tab-btn { padding:8px 10px; border:1px solid #ddd; border-bottom:none; border-radius:10px 10px 0 0; background:#f7f7f7; cursor:pointer; }
+  .tab-btn.active { background:#fff; font-weight:600; }
+  .tab { display:none; border:1px solid #ddd; border-radius:0 10px 10px 10px; padding:12px; }
+  .tab.active { display:block; }
+
+  .grid-two { display:grid; grid-template-columns:1fr; gap:12px; }
+  @media (min-width: 900px) { .grid-two { grid-template-columns:1fr 1fr; } }
+
+  .grid-three { display:grid; grid-template-columns:1fr; gap:12px; }
+  @media (min-width: 900px) { .grid-three { grid-template-columns:1fr 1fr 1fr; } }
+
+  .label { font-weight:600; margin-bottom:4px; display:block; }
+  .input, .textarea, .select { width:100%; box-sizing:border-box; padding:10px 12px; }
+  .textarea { min-height:120px; }
+  .muted { opacity:.7; font-size:.9em; }
+  .card { background:#fff; border:1px solid #eee; border-radius:12px; padding:12px; }
+  .right{ text-align:right; }
+</style>
+
+<h1>{{ title or "Nouvelle garantie" }}</h1>
+{% if error %}<div class="alert" style="margin-bottom:8px;">{{ error }}</div>{% endif %}
+
+{% set hide = UI_HIDE or [] %}
+{% set ro = UI_READONLY or [] %}
+{% set tabs_def = UI_TABS or [] %}
+{% set labels = UI_LABELS or {} %}
+{% set helps = UI_HELP or {} %}
+{% set widgets = UI_WIDGETS or {} %}
+{% set phs = UI_PLACEHOLDERS or {} %}
+
+{# Colonnes visibles #}
+{% set visible = namespace(cols=[]) %}
+{% for c in cols %}{% if c not in hide %}{% set _ = visible.cols.append(c) %}{% endif %}{% endfor %}
+
+{# Onglets à masquer ici (création uniquement) #}
+{% set hidden_tab_names = ["Local Garantie", "Audit"] %}
+
+{# Cols des onglets masqués (à exclure y compris de "Autres") #}
+{% set hidden = namespace(cols=[]) %}
+{% for pair in tabs_def %}
+  {% if pair[0] in hidden_tab_names %}
+    {% for c in pair[1] %}
+      {% if c in visible.cols %}{% set _ = hidden.cols.append(c) %}{% endif %}
+    {% endfor %}
+  {% endif %}
+{% endfor %}
+
+{# Construire les onglets #}
+{% set tabs = namespace(items=[]) %}
+{% set assigned = namespace(cols=[]) %}
+
+{% for pair in tabs_def %}
+  {% set tab_name = pair[0] %}
+  {% set fields   = pair[1] %}
+
+  {% if tab_name in hidden_tab_names %}
+    {# consomme les colonnes pour ne pas les voir dans "Autres" #}
+    {% for c in fields %}
+      {% if c in visible.cols and c not in assigned.cols %}
+        {% set _ = assigned.cols.append(c) %}
+      {% endif %}
+    {% endfor %}
+  {% else %}
+    {% set ex = namespace(cols=[]) %}
+    {% for c in fields %}
+      {% if c in visible.cols and c not in assigned.cols and c not in hidden.cols %}
+        {% set _ = ex.cols.append(c) %}
+        {% set _ = assigned.cols.append(c) %}
+      {% endif %}
+    {% endfor %}
+    {% if ex.cols|length %}{% set _ = tabs.items.append( (tab_name, ex.cols) ) %}{% endif %}
+  {% endif %}
+{% endfor %}
+
+{# Reste #}
+{% set rest = namespace(cols=[]) %}
+{% for c in visible.cols %}
+  {% if c not in assigned.cols and c not in hidden.cols %}
+    {% set _ = rest.cols.append(c) %}
+  {% endif %}
+{% endfor %}
+{% if rest.cols|length %}{% set _ = tabs.items.append( ("Autres", rest.cols) ) %}{% endif %}
+
+<div style="margin:8px 0 12px; display:flex; gap:8px; flex-wrap:wrap;">
+  <button type="button" class="btn btn-secondary" onclick="openDup()">📄 Dupliquer une garantie existante…</button>
+</div>
+<div class="controls" style="margin:6px 0 10px;">
+  <button type="button" id="btnOpenMaintenance" class="btn btn-secondary">
+    Ouvrir Maintenance (pré-remplie)
+  </button>
+</div>
+
+<form id="garantie-form" method="post" action="/garanties/new">
+  <input type="hidden" name="__merge_target" id="__merge_target">
+
+  <div class="tabs" id="tabs">
+    {% for t in tabs.items %}{% set name = t[0] %}
+      <button type="button" class="tab-btn {{ 'active' if loop.first }}" data-tab="tab{{ loop.index }}">{{ name }}</button>
+    {% endfor %}
+  </div>
+
+  {% for t in tabs.items %}
+    {% set name = t[0] %}{% set fields = t[1] %}
+    <div class="tab {{ 'active' if loop.first }}" id="tab{{ loop.index }}">
+      <div class="{{ 'grid-three' if name == "Pièces et Main d'Oeuvre" else 'grid-two' }}">
+        {% for c in fields %}
+          {% set val = (record.get(c) or '') %}
+          {% set lc = c|lower %}
+          {% set label = labels.get(c) or c %}
+          {% set help = helps.get(c) %}
+          {% set widget = widgets.get(c) or "text" %}
+          {% set ph = phs.get(c) or '' %}
+          {% set is_long = val and (val|string)|length > 120 %}
+
+          <div class="card">
+            <label class="label">{{ label }}</label>
+
+            {# --- Textarea / longs champs --- #}
+            {% if widget == "textarea" or lc in ["commentaire","observations","notes","note","panne","details","description"] or is_long %}
+              <textarea name="{{ c }}" class="textarea" placeholder="{{ ph }}">{{ val }}</textarea>
+
+            {# --- Oui/Non --- #}
+            {% elif widget == "select-yesno" %}
+              <select name="{{ c }}" class="select">
+                <option value="" {{ ""==val and "selected" or "" }}>—</option>
+                <option value="0" {{ ("0"==val) and "selected" or "" }}>Non</option>
+                <option value="1" {{ ("1"==val) and "selected" or "" }}>Oui</option>
+              </select>
+
+            {# --- Type de garantie (préremplissage/suggestion) --- #}
+            {% elif widget == "select-typegarantie" %}
+              {% set options = TYPE_GARANTIE_OPTIONS or [] %}
+              {# ancien hardcode supprimé : options dynamiques depuis la base #}
+              {#
+                "GARANTIE PIECES","PARTICIPATION COMMERCIALE","OS","GARANTIE COMMERCIALE",
+                "MOL","SOL","INCIDENT","GARANTIE","MAXI CARE","GARANTIE AMAZONE",
+                "GARANTIE MASHIO","CAMPA CARE","MOL CLAAS LOCATION","SOL CLAAS LOCATION",
+                "VISITE FIN GARANTIE","GARANTIE MAUGUIN","GARANTIE ROUSSEAU",
+                "Amazone Ticket service","GARANTIE ALO"
+              #}
+              {# valeur désirée = Type ou, si vide, suggestion mappée #}
+              {% set desired_raw = record.get("Type") or record.get("Cession") or "" %}
+              {% set desired = desired_raw | trim %}
+              {% if not desired and TYPE_MAPPED_FROM_CESSION %}{% set desired = TYPE_MAPPED_FROM_CESSION %}{% endif %}
+              {% set desired_up = desired | upper %}
+              {% set options_up = options | map('upper') | list %}
+
+              <select name="{{ c }}" class="select">
+                <option value=""></option>
+                {% for opt in options %}
+                  {% set opt_up = opt | upper %}
+                  <option value="{{ opt }}" {{ 'selected' if desired_up == opt_up else '' }}>{{ opt }}</option>
+                {% endfor %}
+                {% if desired and (desired_up not in options_up) %}
+                  <option value="{{ desired }}" selected>{{ desired }}</option>
+                {% endif %}
+              </select>
+
+              {% if TYPE_MAPPED_FROM_CESSION %}
+                {% if record.get("Type") and (record.get("Type")|trim|upper) != (TYPE_MAPPED_FROM_CESSION|upper) %}
+                  <div class="muted" style="margin-top:4px">🛈 Suggestion via <strong>code cession</strong> : <em>{{ TYPE_MAPPED_FROM_CESSION }}</em></div>
+                {% else %}
+                  <div class="muted" style="margin-top:4px">🛈 Prérempli automatiquement via <strong>code cession</strong>.</div>
+                {% endif %}
+              {% endif %}
+
+            {# --- Checkbox Franchise 150 --- #}
+            {% elif widget == "checkbox-franchise" %}
+              <label style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" name="{{ c }}" value="150" {{ 'checked' if (val|string) == '150' else '' }}>
+                <span>Appliquer franchise 150</span>
+              </label>
+              <div class="muted" style="margin-top:4px">Si coché, <strong>150</strong> sera enregistré.</div>
+
+            {# --- Échantillon d’huiles (2 zones + hidden) --- #}
+            {% elif widget == "echantillon-huiles" %}
+              {% set raw = (record.get(c) or '') %}
+              {% set m = '' %}{% set b = '' %}
+              {% if '|' in raw %}
+                {% set parts = raw.split('|') %}
+                {% set m = (parts[0].split(':')[-1] | trim) %}
+                {% if parts|length > 1 %}{% set b = (parts[1].split(':')[-1] | trim) %}{% endif %}
+              {% elif '//' in raw %}
+                {% set parts = raw.split('//') %}
+                {% set m = (parts[0].split(':')[-1] | trim) %}
+                {% if parts|length > 1 %}{% set b = (parts[1].split(':')[-1] | trim) %}{% endif %}
+              {% elif '\n' in raw %}
+                {% set parts = raw.split('\n') %}
+                {% set m = (parts[0].split(':')[-1] | trim) %}
+                {% if parts|length > 1 %}{% set b = (parts[1].split(':')[-1] | trim) %}{% endif %}
+              {% endif %}
+
+              <div class="grid-two">
+                <div>
+                  <label class="label">Huile Moteur</label>
+                  <input class="input" id="EH_moteur" name="EH_moteur" value="{{ m }}" placeholder="Ex: 15W40 (date, réf...)">
+                </div>
+                <div>
+                  <label class="label">Huile Boite / Pont</label>
+                  <input class="input" id="EH_boite" name="EH_boite" value="{{ b }}" placeholder="Ex: UTTO (date, réf...)">
+                </div>
+              </div>
+              <input type="hidden" id="EH_hidden" name="Echantillon d'huiles" value="{{ raw }}">
+              <div class="muted" style="margin-top:4px">Enregistré : <code>Moteur: … | Boite/Pont: …</code></div>
+              <script>
+              (function(){
+                const m = document.getElementById('EH_moteur');
+                const b = document.getElementById('EH_boite');
+                const h = document.getElementById('EH_hidden');
+                if(!m || !b || !h) return;
+                function sync(){
+                  const mv = (m.value || '').trim();
+                  const bv = (b.value || '').trim();
+                  h.value = `Moteur: ${mv}${(mv||bv) ? ' | ' : ''}${bv ? 'Boite/Pont: ' + bv : ''}`.trim();
+                }
+                m.addEventListener('input', sync);
+                b.addEventListener('input', sync);
+                sync();
+                const form = m.closest('form');
+                if(form){ form.addEventListener('submit', sync); }
+              })();
+              </script>
+
+            {# --- Indicateur rebus (icone + hidden 1/0) --- #}
+            {% elif widget == "rebus-indicator" %}
+              <span id="rebus_indicator" class="muted">—</span>
+              <input type="hidden" name="{{ c }}" id="rebus_flag" value="{{ (record.get(c) or '') }}">
+
+            {# --- Number --- #}
+            {% elif widget == "number" %}
+              <input type="number" step="any" name="{{ c }}" class="input" value="{{ val }}" placeholder="{{ ph }}">
+
+            {# --- Date (jj/mm/aaaa) --- #}
+            {% elif widget == "date" %}
+              <input type="text" name="{{ c }}" class="input"
+                     value="{{ val }}" placeholder="{{ ph or 'jj/mm/aaaa' }}"
+                     ondblclick="fillToday(this)">
+
+            {# --- Text par défaut --- #}
+            {% else %}
+              <input name="{{ c }}" class="input" value="{{ val }}" placeholder="{{ ph }}">
+            {% endif %}
+
+            {% if help %}<div class="muted" style="margin-top:4px">{{ help }}</div>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+
+  <div style="margin-top:12px; display:flex; gap:8px;">
+    <button class="btn" type="submit">Créer</button>
+    <a class="btn btn-secondary" href="/garanties">Annuler</a>
+  </div>
+</form>
+
+{# ---- Popup duplication par N° ---- #}
+<style>
+  .modal-backdrop{ position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:9999; }
+  .modal{ background:#fff; border-radius:12px; width:min(560px, 96vw); padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+  .modal h3{ margin:0 0 8px; }
+</style>
+<div class="modal-backdrop" id="dupCreateModal" aria-hidden="true">
+  <div class="modal">
+    <h3>Dupliquer une garantie</h3>
+    <p class="muted" style="margin-top:-4px">Saisis le <strong>N°</strong> à dupliquer. Un nouveau N° sera créé.</p>
+    <form method="post" action="/garanties/duplicate" style="display:flex; gap:8px; margin-top:10px;">
+      <input class="input" name="__duplicate_src" placeholder="N° à dupliquer" required style="flex:1;">
+      <button class="btn" type="submit">Dupliquer</button>
+      <button class="btn btn-secondary" type="button" onclick="closeDup()">Annuler</button>
+    
+<div class="mb-4">
+  <label class="inline-flex items-center gap-2">
+    <input type="checkbox" name="prise_en_charge" value="1" {% if item and item.get('prise_en_charge') in (1, '1', True) %}checked{% endif %} class="rounded border-gray-300">
+    <span>Prise en charge</span>
+  </label>
+</div>
+</form>
+  </div>
+</div>
+
+{# ---- Popup doublons N°OR (merge) ---- #}
+{% if DUP_OR_LIST and DUP_OR_LIST|length > 0 %}
+<style>
+  .modal-backdrop-dup{
+    position:fixed; inset:0; background:rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; z-index:9999;
+  }
+  .modal-dup{
+    background:#fff; border-radius:12px; width:min(920px, 96vw); max-height:86vh; overflow:auto; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.25);
+  }
+  .table-mini{ width:100%; border-collapse:collapse; }
+  .table-mini th,.table-mini td{ border-bottom:1px solid #eee; padding:8px 6px; text-align:left; }
+  .table-mini th{ background:#fafafa; position:sticky; top:0; }
+</style>
+<div class="modal-backdrop-dup" id="dupModal">
+  <div class="modal-dup">
+    <h3>Des garanties existent déjà avec ce N° OR ({{ DUP_OR_VALUE }})</h3>
+    <p class="muted" style="margin-top:-4px">Choisis une ligne à <strong>mettre à jour</strong> ou <em>crée quand même</em> un nouveau dossier.</p>
+
+    <table class="table-mini">
+      <thead>
+        <tr>
+          <th>N° DG</th><th>N° OR</th><th>Type</th><th>Client</th><th>Machine</th><th>Date OR</th>
+          <th class="right">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in DUP_OR_LIST %}
+        <tr>
+          <td>{{ r.NUM_DG }}</td>
+          <td>{{ r["NUM_OR"] }}</td>
+          <td>{{ r["Type"] }}</td>
+          <td>{{ r["Client"] }}</td>
+          <td>{{ r["Machine"] }}</td>
+          <td>{{ r["Date_OR"] }}</td>
+          <td class="right">
+            <button type="button" class="btn" onclick="mergeWith({{ r.NUM_DG }})">Mettre à jour</button>
+            <a class="btn btn-secondary" href="/garanties/item/{{ r.NUM_DG }}" target="_blank" rel="noopener">Voir</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+      <button type="button" class="btn btn-secondary" onclick="closeDup()">Annuler</button>
+      <button type="button" class="btn btn-danger" onclick="proceedCreate()">Créer quand même</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  var hasDup = {{ (DUP_OR_LIST|length) if DUP_OR_LIST is defined else 0 }};
+  if (hasDup > 0) {
+    var m = document.getElementById('dupModal');
+    if (m) { m.style.display = 'flex'; m.setAttribute('aria-hidden','false'); }
+  }
+});
+</script>
+
+<script>
+  // Onglets
+  const btns = document.querySelectorAll('.tab-btn');
+  const tabs = document.querySelectorAll('.tab');
+  btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      btns.forEach(b => b.classList.remove('active'));
+      tabs.forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Date du jour en double-clic
+  function fillToday(el) {
+    const now = new Date();
+    const d = String(now.getDate()).padStart(2,'0');
+    const m = String(now.getMonth()+1).padStart(2,'0');
+    el.value = `${d}/${m}/${now.getFullYear()}`;
+  }
+
+  // Popup duplication par N°
+  function openDup(){
+    const m = document.getElementById('dupCreateModal');
+    if (m){ m.style.display = 'flex'; m.setAttribute('aria-hidden','false'); }
+  }
+  function closeDup(){
+    const m = document.getElementById('dupCreateModal');
+    if (m){ m.style.display = 'none'; m.setAttribute('aria-hidden','true'); }
+  }
+</script>
+
+<script>
+(function () {
+  // ====== utilitaires nbre ======
+  function byName(name) { return document.querySelector('[name="' + name + '"]'); }
+  function parseFR(v) {
+    if (v == null) return NaN;
+    v = String(v).trim().replace(/\s/g, "");
+    v = v.replace(",", ".").replace(/[^0-9.\-]/g, "");
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  function formatOut(n) { return Number.isFinite(n) ? (Math.round(n * 1000) / 1000).toString() : ""; }
+
+  const f = {
+    // Pièces
+    pd: byName("Pieces_Demandes"),
+    pr: byName("Pieces_Rembourses"),
+    pf: byName("Pieces_Refuses"),
+    // M.O.
+    md: byName("MO_Demande"),
+    mr: byName("MO_Rembourse"),
+    mf: byName("MO_Refuse"),
+    // Total
+    mnn: byName("Montant_non_rembourse"),
+  };
+
+  function calcPieces() {
+    if (!f.pf) return;
+    const d = parseFR(f.pd && f.pd.value);
+    const r = parseFR(f.pr && f.pr.value);
+    if (isNaN(d) && isNaN(r)) return;
+    const diff = (isNaN(d) ? 0 : d) - (isNaN(r) ? 0 : r);
+    f.pf.value = formatOut(diff);
+  }
+  function calcMO() {
+    if (!f.mf) return;
+    const d = parseFR(f.md && f.md.value);
+    const r = parseFR(f.mr && f.mr.value);
+    if (isNaN(d) && isNaN(r)) return;
+    const diff = (isNaN(d) ? 0 : d) - (isNaN(r) ? 0 : r);
+    f.mf.value = formatOut(diff);
+  }
+  function calcTotal() {
+    if (!f.mnn) return;
+    const pf = parseFR(f.pf && f.pf.value);
+    const mf = parseFR(f.mf && f.mf.value);
+    if (isNaN(pf) && isNaN(mf)) return;
+    const sum = (isNaN(pf) ? 0 : pf) + (isNaN(mf) ? 0 : mf);
+    f.mnn.value = formatOut(sum);
+  }
+
+  ["input","change","blur"].forEach(evt => {
+    if (f.pd) f.pd.addEventListener(evt, () => { calcPieces(); calcTotal(); });
+    if (f.pr) f.pr.addEventListener(evt, () => { calcPieces(); calcTotal(); });
+    if (f.md) f.md.addEventListener(evt, () => { calcMO();     calcTotal(); });
+    if (f.mr) f.mr.addEventListener(evt, () => { calcMO();     calcTotal(); });
+  });
+  ["input","change","blur"].forEach(evt => {
+    if (f.pf) f.pf.addEventListener(evt, calcTotal);
+    if (f.mf) f.mf.addEventListener(evt, calcTotal);
+  });
+  calcPieces(); calcMO(); calcTotal();
+})();
+</script>
+
+<script>
+(function(){
+  function byName(n){ return document.querySelector('[name="'+n+'"]'); }
+  function parseFRDate(s){
+    if(!s) return null;
+    s = String(s).trim();
+    const m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    if(!m) return null;
+    const d = parseInt(m[1],10), mo = parseInt(m[2],10)-1, y = parseInt(m[3],10);
+    const dt = new Date(y, mo, d);
+    return isNaN(dt) ? null : dt;
+  }
+  function formatFRDate(d){
+    const p = n => String(n).padStart(2,'0');
+    return d ? `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}` : "";
+  }
+  function addDays(date, days){
+    const d = new Date(date.getTime());
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+
+  const elDateDemande = byName("Date");
+  const elEmplacement = byName("Emplacement");
+  const elDatePaiement= byName("date_paiement");
+  const elDateRebus   = byName("Date_rebus");
+  let   elRebusFlag   = document.getElementById("rebus_flag");
+  const elRebusInd    = document.getElementById("rebus_indicator");
+
+  // recrée le hidden si absent
+  if(!elRebusFlag && elRebusInd){
+    elRebusFlag = document.createElement('input');
+    elRebusFlag.type = 'hidden';
+    elRebusFlag.name = "Piéces mise au rebus";
+    elRebusFlag.id   = "rebus_flag";
+    elRebusInd.insertAdjacentElement('afterend', elRebusFlag);
+  }
+
+  function updateEmplacement(){
+    if(!elDateDemande || !elEmplacement) return;
+    const d = parseFRDate(elDateDemande.value);
+    if(!d) return;
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yyyy = d.getFullYear();
+    elEmplacement.value = `${mm}/${yyyy}`;
+  }
+  function updateDateRebus(){
+    if(!elDatePaiement || !elDateRebus) return;
+    const dp = parseFRDate(elDatePaiement.value);
+    if(!dp) return;
+    const d90 = addDays(dp, 90);
+    elDateRebus.value = formatFRDate(d90);
+    updateRebusIndicator();
+  }
+  function updateRebusIndicator(){
+    if(!elDateRebus || !elRebusInd || !elRebusFlag) return;
+    const dr = parseFRDate(elDateRebus.value);
+    if(!dr){
+      elRebusInd.textContent = "—";
+      elRebusFlag.value = "";
+      return;
+    }
+    const today = new Date(); today.setHours(0,0,0,0);
+    dr.setHours(0,0,0,0);
+    const passed = (today.getTime() >= dr.getTime());
+    elRebusInd.textContent = passed ? "✅" : "❌";
+    elRebusFlag.value = passed ? "1" : "0";
+  }
+
+  if(elDateDemande){ ["input","change","blur"].forEach(e=>elDateDemande.addEventListener(e, updateEmplacement)); }
+  if(elDatePaiement){ ["input","change","blur"].forEach(e=>elDatePaiement.addEventListener(e, updateDateRebus)); }
+  if(elDateRebus){ ["input","change","blur"].forEach(e=>elDateRebus.addEventListener(e, updateRebusIndicator)); }
+
+  updateEmplacement();
+  updateDateRebus();
+  updateRebusIndicator();
+
+  // Popup “doublons N°OR” : merge vs create
+  window.closeDup = function(){
+    const m = document.getElementById('dupModal');
+    if (m) m.remove();
+  };
+  window.proceedCreate = function(){
+    closeDup(); // POST normal sur /garanties/new
+  };
+  window.mergeWith = function(numero){
+    const tgt = document.getElementById('__merge_target');
+    if (tgt) tgt.value = String(numero);
+    const form = document.querySelector('form[action="/garanties/new"]') || document.querySelector('form');
+    if (form){
+      form.action = "/garanties/merge";
+      form.method = "post";
+      form.submit();
+    }
+  };
+})();
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  const btn = document.getElementById('btnOpenMaintenance');
+  if (!btn) return;
+
+  btn.addEventListener('click', function(){
+    // Récupère les valeurs actuelles saisies dans le formulaire
+    const dgEl = document.querySelector('input[name="NUM_DG"]');
+    const orEl = document.querySelector('input[name="NUM_OR"]');
+    const dg   = dgEl ? (dgEl.value || '').trim() : '';
+    const orv  = orEl ? (orEl.value || '').trim() : '';
+
+    const p = new URLSearchParams();
+    if (dg)  p.set('dg', dg);
+    if (orv) p.set('or', orv);
+
+    const url = '/maintenance' + (p.toString() ? ('?' + p.toString()) : '');
+    window.open(url, '_blank'); // ouvre dans un nouvel onglet
+  });
+});
+</script>
+<script>
+function mergeWith(num){
+  var f = document.getElementById('garantie-form') || document.forms[0];
+  if(!f){ alert('Formulaire introuvable'); return; }
+  f.action = '/garanties/merge';
+  var hid = f.querySelector('input[name="__merge_target"]');
+  if(!hid){
+    hid = document.createElement('input');
+    hid.type = 'hidden';
+    hid.name = '__merge_target';
+    f.appendChild(hid);
+  }
+  hid.value = String(num);
+  f.submit();
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  var dupCount = {{ (DUP_OR_LIST|length) if DUP_OR_LIST is defined else 0 }};
+  if(dupCount > 0){
+    var dlg = document.getElementById('dup-or-dialog');
+    if(dlg && typeof dlg.showModal === 'function') dlg.showModal();
+    else if(dlg) dlg.classList.remove('hidden');
+  }
+});
+/* garanties-autocalc */
+document.addEventListener('DOMContentLoaded', function(){
+  function q(name){ return document.querySelector('[name="'+name+'"]'); }
+  const f = {
+    pd: q('Pieces_Demandes'),
+    pr: q('Pieces_Rembourses'),
+    md: q('MO_Demande'),
+    mr: q('MO_Rembourse'),
+    pref: q('Pieces_Refuses'),
+    moref: q('MO_Refuse'),
+    nonremb: q('Montant_non_rembourse')
+  };
+  ['pref','moref','nonremb'].forEach(k => { if (f[k]) f[k].readOnly = true; });
+  function parseNum(v){
+    if (v==null) return 0;
+    v = String(v).replace(/\s+/g,'').replace(',', '.');
+    const x = parseFloat(v);
+    return isNaN(x) ? 0 : x;
+  }
+  function fmt(x){
+    x = Math.max(0, x);
+    let s = (Math.round(x*100)/100).toFixed(2);
+    s = s.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+    return s;
+  }
+  function recalc(){
+    const pd = parseNum(f.pd && f.pd.value);
+    const pr = parseNum(f.pr && f.pr.value);
+    const md = parseNum(f.md && f.md.value);
+    const mr = parseNum(f.mr && f.mr.value);
+    if (f.pref)    f.pref.value    = fmt(pd - pr);
+    if (f.moref)   f.moref.value   = fmt(md - mr);
+    if (f.nonremb) f.nonremb.value = fmt((pd + md) - (pr + mr));
+  }
+  ['pd','pr','md','mr'].forEach(k => { if (f[k]) ['input','change','blur'].forEach(evt => f[k].addEventListener(evt, recalc)); });
+  recalc();
+});
+</script>
+
+{% endblock %}
+

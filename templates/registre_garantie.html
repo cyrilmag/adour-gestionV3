@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Registre Garantie{% endblock %}
+{% block content %}
+<h1>Registre des Garanties</h1>
+
+{# 
+  Cette page affiche le même tableau que /registre-garantie, 
+  mais la logique de rendu est centralisée dans templates/table.html.
+  Pour ce registre, templates/table.html a été modifié pour formater
+  automatiquement toutes les dates repérées au format ISO (YYYY-MM-DD...)
+  en JJ/MM/AAAA lorsque l'URL commence par /registre-garantie.
+#}
+
+<div class="card" style="padding:12px">
+  <p class="muted">Le contenu du tableau est rendu par le template principal <code>table.html</code> quand vous naviguez vers <code>/registre-garantie</code>.</p>
+</div>
+{% endblock %}

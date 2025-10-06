@@ -1,0 +1,283 @@
+/* ===========================
+   Adour Gestion - Styles
+   =========================== */
+
+/* Reset / Base */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f4f5f7;
+  color: #1f2937;
+}
+
+/* Layout */
+.layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+}
+.sidebar {
+  background: #0f172a;
+  color: #fff;
+  padding: 16px;
+}
+.sidebar h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+.sidebar ul {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.sidebar a { color: #e2e8f0; text-decoration: none; }
+.sidebar li.active > a,
+.sidebar a:hover { color: #fff; text-decoration: underline; }
+
+.main { padding: 16px; }
+
+/* Utils */
+.muted { color: #6b7280; }
+.badge {
+  display: inline-block;
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+/* Cards */
+.card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+/* Inputs & Buttons */
+.input, input[type="text"], input[type="number"], input[type="date"], select, textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+}
+.input:focus, select:focus, textarea:focus {
+  outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.15);
+}
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 8px 12px;
+  background: #111827; color: #fff;
+  border: 1px solid #111827;
+  border-radius: 8px;
+  cursor: pointer; text-decoration: none;
+  font-size: 14px;
+}
+.btn:hover { opacity: .95; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-secondary {
+  background: #fff; color: #111827; border-color: #d1d5db;
+}
+.btn-danger {
+  background: #dc2626; border-color: #dc2626;
+}
+
+/* Alerts */
+.alert {
+  padding: 10px 12px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+}
+
+/* Controls row au-dessus de la table */
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+
+/* ===========================
+   TABLE + scroll top
+   =========================== */
+
+.table-area { display: grid; gap: 6px; }
+
+/* Barre de scroll horizontale en haut */
+.hscroll-top {
+  height: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.hscroll-top::-webkit-scrollbar { height: 12px; }
+
+/* Zone de scroll principale */
+.table-wrapper {
+  overflow: auto;
+  /* sera recalculé dynamiquement par ui.js pour s'adapter à la fenêtre */
+  max-height: calc(100vh - 260px);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+/* Table */
+.table {
+  width: max(100%, 1200px);
+  border-collapse: separate; border-spacing: 0;
+  font-size: 14px;
+}
+
+.table thead th {
+  position: sticky; top: 0;
+  background: #fff;
+  z-index: 2;
+  box-shadow: 0 1px 0 #e6e6e6;
+  text-align: left;
+  padding: 10px;
+  white-space: nowrap;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.table thead th a {
+  color: inherit; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.table thead th .arrow { opacity: .7; font-size: .9em; }
+
+.table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: top;
+  white-space: nowrap; /* garde la largeur -> scroll horizontal */
+}
+.table tbody tr:nth-child(even) { background: #fafafa; }
+.table tbody tr:hover { background: #f3f4f6; }
+
+.table tfoot td {
+  position: sticky; bottom: 0;
+  background: #fff;
+  padding: 8px 10px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Ligne des filtres (si utilisée) */
+.filters-row th { background: #fbfbff; position: sticky; top: 42px; z-index: 1; }
+
+/* Pagination */
+.pagination {
+  display: flex; gap: 10px; align-items: center; justify-content: flex-end;
+  margin-top: 10px;
+}
+
+/* Divers */
+.label { display:block; font-weight: 600; margin-bottom: 4px; }
+.grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-1 { display:grid; grid-template-columns: 1fr; gap: 10px; }
+.col-span-2 { grid-column: span 2; }
+
+/* === Registre Garantie — couleurs par Etat_RG (prioritaires) === */
+.table tbody tr[class^="row-etat-"] > td { transition: background-color .12s ease; }
+
+/* Couleurs par Etat_RG */
+.table tbody tr.row-etat-garantie-pieces  > td { background: #e0f2fe !important; }
+.table tbody tr.row-etat-maxi-care        > td { background: #dcfce7 !important; }
+.table tbody tr.row-etat-os               > td { background: #fef9c3 !important; }
+.table tbody tr.row-etat-participation-commerciale > td { background: #fce7f3 !important; }
+.table tbody tr.row-etat-garantie-commerciale > td { background: #e5e7eb !important; }
+.table tbody tr.row-etat-mol              > td { background: #fff7ed !important; }
+.table tbody tr.row-etat-sol              > td { background: #f3e8ff !important; }
+.table tbody tr.row-etat-incident         > td { background: #fee2e2 !important; }
+.table tbody tr.row-etat-garantie-amazone > td { background: #e0f7f7 !important; }
+.table tbody tr.row-etat-garantie-mashio  > td { background: #e8f7e0 !important; }
+.table tbody tr.row-etat-garantie-mauguin > td { background: #f7e0f7 !important; }
+.table tbody tr.row-etat-garantie-rousseau> td { background: #f7f0e0 !important; }
+.table tbody tr.row-etat-garantie-alo     > td { background: #e0f0ff !important; }
+.table tbody tr.row-etat-campa-care       > td { background: #e6fffb !important; }
+.table tbody tr.row-etat-mol-claas-location > td { background: #fff0e6 !important; }
+.table tbody tr.row-etat-sol-claas-location > td { background: #efe6ff !important; }
+.table tbody tr.row-etat-visite-fin-garantie > td { background: #f0fdf4 !important; }
+.table tbody tr.row-etat-amazone-ticket-service > td { background: #e6f2ff !important; }
+.table tbody tr.row-etat-garantie         > td { background: #f4f4f5 !important; }
+
+/* Alerte remboursement partiel / non remboursé > 0 – rouge prioritaire */
+.table tbody tr.row-alert-partial > td {
+  background: #fecaca !important;
+  color: #7f1d1d;
+  font-weight: 600;
+}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
+.kpi-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.kpi-label{font-size:12px;color:#64748b}
+.kpi-value{font-size:34px;font-weight:700;line-height:1.1;margin-top:4px}
+
+/* Accordéon simple */
+.accordion {margin-top:18px;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#fff}
+.accordion-header{display:flex;align-items:center;gap:.5rem;width:100%;padding:12px 16px;border:0;background:#f8fafc;cursor:pointer;font-weight:600}
+.accordion-header .chevron{transition:transform .15s ease}
+.accordion-content{display:none;padding:12px 16px}
+.accordion.open .accordion-content{display:block}
+.accordion.open .chevron{transform:rotate(90deg)}
+
+/* Table */
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
+.table thead th{font-size:.9rem;color:#475569;background:#f9fafb;position:sticky;top:0}
+.badge{display:inline-block;background:#eef2ff;color:#4338ca;border-radius:9999px;padding:2px 8px;font-size:.75rem}
+.muted{color:#64748b}
+
+.th-sort{display:inline-flex; align-items:center; gap:.35rem; color:inherit; text-decoration:none}
+.th-sort:hover{text-decoration:underline}
+.sort-arrow{font-size:.8rem; opacity:.8}
+
+.tabs { display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+.tab-btn { padding:8px 10px; border:1px solid #ddd; border-bottom:none; border-radius:10px 10px 0 0; background:#f7f7f7; cursor:pointer; }
+.tab-btn.active { background:#fff; font-weight:600; }
+.tab { display:none; border:1px solid #ddd; border-radius:0 10px 10px 10px; padding:12px; }
+.tab.active { display:block; }
+.grid-two { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.label { font-weight:600; margin-bottom:4px; display:block; }
+.input, .textarea, .select { width:100%; box-sizing:border-box; padding:10px 12px; }
+.textarea { min-height: 120px; }
+.muted { opacity:.7; font-size:.9em; }
+.readonly { background:#fafafa; }
+
+.grid-two {
+  display:grid; 
+  grid-template-columns:1fr; 
+  gap:12px;
+}
+@media (min-width: 900px) {
+  .grid-two { grid-template-columns:1fr 1fr; }
+}
+
+.grid-three {
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+}
+@media (min-width: 900px) {
+  .grid-three { grid-template-columns:1fr 1fr 1fr; }
+}
+.page--detail { font-size: 18px; line-height: 1.45; }
+.page--detail h1 { font-size: 1.8rem; margin-bottom: .6rem; }
+.page--detail h2 { font-size: 1.25rem; margin: 0.2rem 0 0.8rem; }
+.page--detail .label { font-weight: 600; font-size: 1.02rem; margin-bottom: 4px; display:block; }
+.page--detail .input { font-size: 1rem; padding: 10px 12px; }
+.page--detail .card { padding: 14px 16px; }
+.page--detail .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.page--detail .grid-1 { display:grid; grid-template-columns: 1fr; gap: 12px; }
+.page--detail .col-span-2 { grid-column: span 2; }
+.page--detail .muted { color: #666; }
+.page--detail .tabs { margin:10px 0 16px; display:flex; gap:8px; }
+.page--detail .tab-pane { margin-top: 8px; }
+.page--detail .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; white-space: pre-wrap; }
+@media (max-width: 900px) {
+  .page--detail .grid-2 { grid-template-columns: 1fr; }
+  .page--detail h1 { font-size: 1.5rem; }
+}

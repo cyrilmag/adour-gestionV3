@@ -1,0 +1,582 @@
+{% extends "base.html" %}
+{% block title %}Intervention XML — Détail{% endblock %}
+{% block content %}
+
+<div class="page--detail">
+  <h1>Détail de l'intervention</h1>
+
+  {% if request.query_params.get('saved') == '1' %}
+    <div class="alert success" style="margin:10px 0">✔️ Intervention enregistrée (Narrosse/Peyrehorade).</div>
+  {% elif request.query_params.get('saved') == '0' %}
+    <div class="alert warning" style="margin:10px 0">⚠️ Aucune ligne mise à jour dans la table cible (vérifie l'atelier et le numéro).</div>
+  {% endif %}
+  {% if request.query_params.get('msg') == 'site-inconnu' %}
+    <div class="alert warning" style="margin:10px 0">⚠️ Atelier/Site non reconnu ⇒ impossible de choisir Narrosse/Peyrehorade.</div>
+  {% endif %}
+
+  <p><a class="btn btn-secondary" href="/interventions-xml">← Retour à la liste</a>
+  <!-- <p>
+    <button class="btn" id="btn-garantie" type="button">➕ Saisir la garantie</button>
+  </p> -->
+<a class="btn"
+   href="/garanties/new?from_intervention={{ rowid }}"
+   target="_blank" rel="noopener noreferrer">
+  ➕ Créer une garantie préremplie
+</a>
+
+  <script>
+    (function(){
+      const q = (sel) => document.querySelector(sel);
+      document.getElementById('btn-garantie')?.addEventListener('click', () => {
+        const getVal = (name) => (q(`[name="${name}"]`)?.value || "").trim();
+        const nOr = (q('input[readonly][value]')?.value || "").trim(); // fallback: first readonly input is Numéro long
+        const client = (q('input[readonly]')?.value || "").trim();
+        const machine = getVal('libelle_court');
+        const type = getVal('type_op');
+        const dateOr = getVal('date_base') || getVal('date_or') || "";
+        const params = new URLSearchParams({ n_or: nOr, client, machine, date_or: dateOr, type });
+        window.open("/garanties?" + params.toString(), "_blank", "noopener");
+      });
+    })();
+  </script>
+
+  <div class="tabs">
+    <button class="btn" type="button" data-tab="tab-infos">Infos</button>
+    <button class="btn btn-secondary" type="button" data-tab="tab-travaux">Travaux</button>
+  </div>
+
+<section id="tab-infos" class="card tab-pane">
+  <h2>Informations</h2>
+  {% if site_val %}
+    <p class="muted" style="margin-top:-6px">Atelier détecté : <strong>{{ site_val }}</strong></p>
+  {% endif %}
+
+  <!-- FORMULAIRE D'ENREGISTREMENT -->
+  <form method="post" action="/interventions-xml/item/{{ rowid }}/save">
+    <div class="grid-2">
+      <div>
+        <label class="label">Numéro (short)</label>
+        <input class="input" type="text" value="{{ num_short or '' }}">
+        <small class="muted">Narrosse = 5 derniers · Peyrehorade = 4 derniers.</small>
+      </div>
+      <div>
+        <label class="label">Numéro (base)</label>
+        <input class="input" type="text" value="{{ num_base or '' }}" readonly>
+      </div>
+      <div>
+        <label class="label">Type</label>
+        <select class="input" name="type_op">
+          <option value=""></option>
+          {% set _sel = (type_op_selected or '') %}
+          {% for opt in [
+            "FACTURABLE",
+            "GARANTIE",
+            "MAXI CARE",
+            "CESSION",
+            "OS",
+            "ENTRETIEN PREVENTIF",
+            "AVOIR",
+            "MALFACON",
+            "AFFAIRE COMMERCIALE",
+            "SUPPRIMER",
+            "CAMPA CARE",
+            "LOCATION CLAAS",
+            "GARANTIE OCCASION",
+            "ASSURANCE"
+          ] %}
+            <option value="{{ opt }}" {{ 'selected' if _sel==opt else '' }}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+        {% if type_op_selected %}
+          <small class="muted">Prérempli via code cession → <strong>{{ type_op_selected }}</strong></small>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="label">Date OR</label>
+        <input class="input" type="text"
+               value="{{ row.get('Date') or row.get('Date_Deb_Trav') or row.get('Date_Creation') or row.get('Date_Ouverture') or '' }}"
+               readonly />
+      </div>
+
+      <!-- *** MODIFIABLE *** -->
+      <div>
+        <label class="label">Date Clôture (jj/mm/aaaa)</label>
+        <input class="input" id="date_jour" name="date_jour" placeholder="jj/mm/aaaa" />
+      </div>
+
+      <div>
+        <label class="label">Nom</label>
+        <input class="input" type="text" value="{{ row.get('Nom') or row.get('Client') or row.get('Raison_Sociale') or '' }}" readonly />
+      </div>
+
+      <!-- *** MODIFIABLE *** -->
+      <div>
+        <label class="label">Machine</label>
+        <input class="input" name="libelle_court"
+               value="{{ row.get('Libellé_Court') or row.get('Libelle_Court') or '' }}" />
+      </div>
+
+      <!-- *** MODIFIABLE *** -->
+      <div class="col-span-2">
+        <label class="label">Pannes</label>
+        <textarea class="input" name="notes" rows="3">{{ row.get('Notes') or row.get('Note') or row.get('Commentaire') or row.get('Commentaires') or '' }}</textarea>
+      </div>
+    </div>
+
+    <button class="btn">Enregistrer intervention</button>
+  </form>
+</section>
+
+  <section id="tab-travaux" class="card tab-pane" style="display:none">
+    <!-- Onglet Travaux -->
+    <div class="tab-panel">
+      <div class="card" style="margin-bottom:12px">
+        <h3 style="margin:0 0 8px">Travaux (XML)</h3>
+        <div id="travaux_xml" style="
+             border:1px solid #ddd; border-radius:8px; padding:12px;
+             white-space:pre-wrap; line-height:1.4; font-size:1.05rem;">
+          {{ travaux_xml or "—" }}
+        </div>
+      </div>
+
+      <div class="card gm-card">
+        <h3 style="margin:0 0 8px">Garanties / Maintenance</h3>
+        <div class="gm-grid">
+          <div class="gm-section">
+            <label class="gm-toggle">
+              <input type="checkbox" id="garantie_flag" {{ 'checked' if garantie_defaults.get('checked') else '' }}>
+              <span>Ajouter les lignes garantie</span>
+            </label>
+            <div id="garantie_extra" class="gm-fields" data-marque="{{ garantie_defaults.get('marque_label') or 'Marque' }}" style="{{ '' if garantie_defaults.get('checked') else 'display:none' }}">
+              <label class="label gm-label">Rapport Adour
+                <input class="input" id="garantie_rapport_adour" value="{{ garantie_defaults.get('rapport_adour', '') }}">
+              </label>
+              <label class="label gm-label">Rapport {{ garantie_defaults.get('marque_label') or 'Marque' }}
+                <input class="input" id="garantie_rapport_marque" value="{{ garantie_defaults.get('rapport_marque', '') }}">
+              </label>
+            </div>
+          </div>
+          <div class="gm-section">
+            <label class="gm-toggle">
+              <input type="checkbox" id="maintenance_flag" {{ 'checked' if maintenance_defaults.get('checked') else '' }}>
+              <span>Ajouter les lignes maintenance</span>
+            </label>
+            <div id="maintenance_extra" class="gm-fields" style="{{ '' if maintenance_defaults.get('checked') else 'display:none' }}">
+              <label class="label gm-label">Rapport Adour
+                <input class="input" id="maintenance_rapport_adour" value="{{ maintenance_defaults.get('rapport_adour', '') }}">
+              </label>
+              <label class="label gm-label">Rapport MOL
+                <input class="input" id="maintenance_rapport_mol" value="{{ maintenance_defaults.get('rapport_mol', '') }}">
+              </label>
+              <label class="label gm-label">Rapport SOL
+                <input class="input" id="maintenance_rapport_sol" value="{{ maintenance_defaults.get('rapport_sol', '') }}">
+              </label>
+              <label class="label gm-label">Révision des…
+                <input class="input" id="maintenance_revision_objet" value="{{ maintenance_defaults.get('revision_objet', '') }}" placeholder="Ex : 500 h / transmission…">
+              </label>
+              <label class="label gm-label gm-wide">Descriptif de la révision
+                <textarea class="input" id="maintenance_revision_desc" rows="3" placeholder="Détails des points vérifiés…" style="width:100%; min-width:0;">{{ maintenance_defaults.get('revision_desc', '') }}</textarea>
+              </label>
+            </div>
+          </div>
+        </div>
+        {% if garantie_rows %}
+        <div class="gm-suggestions">
+          <p class="muted" style="margin:0 0 6px">Garanties associées détectées :</p>
+          <table class="gm-table">
+            <thead>
+              <tr>
+                <th>N° DG</th>
+                <th>N° OR</th>
+                <th>Type</th>
+                <th>N° récépissé</th>
+                <th class="gm-actions">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for num_dg, num_or, type, recep in garantie_rows %}
+              <tr>
+                <td>{{ num_dg }}</td>
+                <td>{{ num_or }}</td>
+                <td>{{ type }}</td>
+                <td>{{ recep }}</td>
+                <td class="gm-actions">
+                  <button type="button" class="btn btn-light" data-fill-garantie data-dg="{{ num_dg }}" data-or="{{ num_or }}" data-recep="{{ recep }}" data-type="{{ type }}">Utiliser</button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% endif %}
+      </div>
+
+      <label style="display:flex; gap:8px; align-items:center; font-size:1.05rem; margin:8px 0 12px;">
+        <input id="deplacement_domicile" type="checkbox" name="deplacement_domicile" value="1">
+        <span>Déplacement à domicile</span>
+      </label>
+
+      <div class="field-with-tools">
+        <div class="label-row">
+          <label class="label">Plainte client</label>
+          <div class="tools">
+            <button type="button" class="btn btn-light" data-spell="#plainte_client" title="Vérifier l'orthographe (navigateur)">ABC</button>
+            <button type="button" class="btn btn-secondary" data-polish="#plainte_client" title="Rédiger proprement">✍️ Rédiger proprement</button>
+          </div>
+        </div>
+        <textarea class="input" id="plainte_client" rows="4" style="width:100%" spellcheck="true" lang="fr"></textarea>
+      </div>
+
+      <div class="field-with-tools">
+        <div class="label-row">
+          <label class="label">Diagnostic</label>
+          <div class="tools">
+            <button type="button" class="btn btn-light" data-spell="#diagnostic" title="Vérifier l'orthographe (navigateur)">ABC</button>
+            <button type="button" class="btn btn-secondary" data-polish="#diagnostic" title="Rédiger proprement">✍️ Rédiger proprement</button>
+            <button type="button" class="btn" data-template="diagnostic" data-target="#diagnostic" title="Insérer un modèle">📄 Modèle</button>
+          </div>
+        </div>
+        <textarea class="input" id="diagnostic" rows="4" style="width:100%" spellcheck="true" lang="fr"></textarea>
+      </div>
+
+      <div class="field-with-tools">
+        <div class="label-row">
+          <label class="label">Réparation</label>
+          <div class="tools">
+            <button type="button" class="btn btn-light" data-spell="#reparation" title="Vérifier l'orthographe (navigateur)">ABC</button>
+            <button type="button" class="btn btn-secondary" data-polish="#reparation" title="Rédiger proprement">✍️ Rédiger proprement</button>
+            <button type="button" class="btn" data-template="reparation" data-target="#reparation" title="Insérer un modèle">📄 Modèle</button>
+          </div>
+        </div>
+        <textarea class="input" id="reparation" rows="4" style="width:100%" spellcheck="true" lang="fr"></textarea>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-top:12px">
+      <button class="btn btn-secondary" type="button" id="btnCopy">Copier</button>
+    </div>
+  </section>
+</div>
+
+<style>
+  .field-with-tools { margin: 10px 0 14px; }
+  .label-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .label-row .tools { display:flex; gap:6px; flex-wrap:wrap; }
+  .gm-card { margin: 12px 0; }
+  .gm-grid { display:flex; flex-wrap:wrap; gap:20px; }
+  .gm-section { flex:1 1 260px; min-width:240px; }
+  .gm-toggle { display:flex; align-items:center; gap:8px; font-weight:600; margin-bottom:8px; }
+  .gm-fields { display:grid; gap:8px; }
+  .gm-label { display:flex; flex-direction:column; gap:4px; font-weight:500; }
+  .gm-label input { width:100%; }
+  .gm-wide { grid-column: 1 / -1; }
+  .gm-wide textarea { width:100%; min-width:0; }
+  .gm-suggestions { margin-top:12px; overflow-x:auto; }
+  .gm-table { width:100%; border-collapse:collapse; font-size:.9rem; }
+  .gm-table th, .gm-table td { border:1px solid #ddd; padding:6px 8px; text-align:left; }
+  .gm-table tbody tr:nth-child(even) { background:#f8f8f8; }
+  .gm-actions { text-align:right; white-space:nowrap; }
+  .pulse {
+    box-shadow: 0 0 0 3px rgba(80,120,255,.25);
+    transition: box-shadow .3s ease;
+  }
+</style>
+<script>
+/** --------- Aide rédaction & orthographe (client-side) ---------- **/
+
+// Polissage simple FR : espaces insécables avant ; : ? !, majuscules début phrase, points finaux, etc.
+function polishFrenchText(s) {
+  if (!s) return "";
+  let t = s;
+
+  // Normalisations de base
+  t = t.replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n");     // trim fin de ligne
+  t = t.replace(/[ \t]{2,}/g, " ");                             // espaces multiples
+  t = t.replace(/\n{3,}/g, "\n\n");                              // trop de lignes vides
+
+  // Espaces avant ; : ? ! (fine / insécable -> on met une espace simple pour compatibilité)
+  t = t.replace(/\s*([;:?!»])/g, " $1");
+  // Espaces après «  et avant » (typo FR classique)
+  t = t.replace(/«\s*/g, "« ").replace(/\s*»/g, " »");
+
+  // Capitaliser début de phrase
+  t = t.replace(/(^|[.!?]\s+)([a-zàâçéèêëîïôûùüÿñœ])/g, (m, p1, p2) => p1 + p2.toUpperCase());
+
+  // Ajouter un point final si la dernière ligne ressemble à une phrase sans ponctuation
+  t = t.replace(/([^\s.?!])\s*$/m, "$1.");
+
+  // Tirets -> puces si la ligne commence par "-" ou "•"
+  const lines = t.split("\n").map(l => l.trimEnd());
+  for (let i=0; i<lines.length; i++) {
+    if (/^-\s+/.test(lines[i])) lines[i] = "• " + lines[i].replace(/^-+\s+/, "");
+  }
+  t = lines.join("\n");
+
+  // Nettoyer espaces avant ponctuation double
+  t = t.replace(/\s+([;:?!])/g, " $1");
+
+  // Trim global
+  t = t.trim();
+  return t;
+}
+
+// Modèles prêts à l'emploi
+const templates = {
+  diagnostic: `Constat :
+• …
+
+Hypothèses :
+• …
+
+Tests effectués :
+• …
+
+Conclusion :
+• …`,
+
+  reparation: `Actions réalisées :
+• …
+
+Pièces remplacées :
+• …
+
+Réglages / Paramétrage :
+• …
+
+Résultat :
+• Bon fonctionnement constaté, essai sur …, conforme.` 
+};
+
+// Focus + rappel visuel pour le correcteur navigateur
+function nudgeSpellcheck(target) {
+  const el = document.querySelector(target);
+  if (!el) return;
+  el.setAttribute("spellcheck", "false");
+  // petite bascule pour relancer la détection
+  requestAnimationFrame(() => {
+    el.setAttribute("spellcheck", "true");
+    el.focus();
+    // petit effet "pulse"
+    el.classList.add("pulse");
+    setTimeout(() => el.classList.remove("pulse"), 900);
+  });
+  // toast simple
+  try {
+    const msg = document.createElement("div");
+    msg.textContent = "Les fautes sont soulignées par votre navigateur.";
+    Object.assign(msg.style, {
+      position: "fixed", bottom: "14px", right: "14px",
+      background: "#222", color: "#fff", padding: "8px 10px",
+      borderRadius: "8px", fontSize: "14px", opacity: "0.95", zIndex: 9999
+    });
+    document.body.appendChild(msg);
+    setTimeout(()=> msg.remove(), 1600);
+  } catch {}
+}
+
+// Attache les boutons
+(function attachWritingHelpers(){
+  // ABC (vérification orthographique)
+  document.querySelectorAll('[data-spell]').forEach(btn=>{
+    btn.addEventListener('click', () => {
+      const sel = btn.getAttribute('data-spell');
+      nudgeSpellcheck(sel);
+    });
+  });
+
+  // ✍️ Rédiger proprement
+  document.querySelectorAll('[data-polish]').forEach(btn=>{
+    btn.addEventListener('click', () => {
+      const sel = btn.getAttribute('data-polish');
+      const el = document.querySelector(sel);
+      if (!el) return;
+      const before = el.value;
+      const after = polishFrenchText(before);
+      el.value = after;
+      // feedback
+      btn.textContent = '✔️ Poli';
+      setTimeout(()=> btn.textContent = '✍️ Rédiger proprement', 1200);
+    });
+  });
+
+  // 📄 Modèles
+  document.querySelectorAll('[data-template]').forEach(btn=>{
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-template');
+      const target = btn.getAttribute('data-target');
+      const el = document.querySelector(target);
+      if (!el) return;
+      const base = templates[key] || "";
+      // On n'écrase pas si déjà du texte : on insère en-dessous
+      el.value = (el.value && el.value.trim().length>0) 
+        ? (el.value.trimEnd() + "\n\n" + base) 
+        : base;
+      el.focus();
+    });
+  });
+})();
+</script>
+
+<script>
+  (function(){
+    const el = document.getElementById('today');
+    if (el) {
+      const d = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      el.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+  })();
+
+  (function(){
+    const buttons = document.querySelectorAll('[data-tab]');
+    function showTab(id){
+      document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+      const pane = document.getElementById(id);
+      if (pane) pane.style.display = '';
+      buttons.forEach(b => b.classList.toggle('btn-secondary', b.getAttribute('data-tab') !== id));
+    }
+    buttons.forEach(b => b.addEventListener('click', () => showTab(b.getAttribute('data-tab'))));
+    showTab('tab-infos');
+  })();
+</script>
+<script>
+  (function(){
+    const garantieFlag = document.getElementById('garantie_flag');
+    const garantieBox = document.getElementById('garantie_extra');
+    const maintenanceFlag = document.getElementById('maintenance_flag');
+    const maintenanceBox = document.getElementById('maintenance_extra');
+
+    function setupToggle(flag, box) {
+      if (!flag || !box) return () => {};
+      const update = () => {
+        box.style.display = flag.checked ? '' : 'none';
+      };
+      flag.addEventListener('change', update);
+      update();
+      return update;
+    }
+
+    const updateGarantieDisplay = setupToggle(garantieFlag, garantieBox);
+    const updateMaintenanceDisplay = setupToggle(maintenanceFlag, maintenanceBox);
+
+    document.querySelectorAll('[data-fill-garantie]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const numDg = btn.getAttribute('data-dg') || '';
+        const numOr = btn.getAttribute('data-or') || '';
+        const recep = btn.getAttribute('data-recep') || '';
+        const type = (btn.getAttribute('data-type') || '').toUpperCase();
+
+        const digits = numOr.replace(/[^0-9]/g, '');
+        const simple = digits.replace(/^0+/, '') || digits;
+        if (numDg && simple) {
+          const combo = `${numDg}-${simple}`;
+          const gAdour = document.getElementById('garantie_rapport_adour');
+          const mAdour = document.getElementById('maintenance_rapport_adour');
+          if (gAdour && !gAdour.value) gAdour.value = combo;
+          if (mAdour && !mAdour.value) mAdour.value = combo;
+        }
+
+        if (recep) {
+          const gMarque = document.getElementById('garantie_rapport_marque');
+          if (gMarque && !gMarque.value) gMarque.value = recep;
+
+          const mMol = document.getElementById('maintenance_rapport_mol');
+          const mSol = document.getElementById('maintenance_rapport_sol');
+          if (mMol && !mMol.value && type.startsWith('MOL')) mMol.value = recep;
+          if (mSol && !mSol.value && type.includes('SOL')) mSol.value = recep;
+        }
+
+        if (garantieFlag && !garantieFlag.checked) {
+          garantieFlag.checked = true;
+          updateGarantieDisplay();
+        }
+        if (maintenanceFlag) {
+          const mAdour = document.getElementById('maintenance_rapport_adour');
+          const mMol = document.getElementById('maintenance_rapport_mol');
+          const mSol = document.getElementById('maintenance_rapport_sol');
+          if ((mAdour && mAdour.value) || (mMol && mMol.value) || (mSol && mSol.value)) {
+            if (!maintenanceFlag.checked) {
+              maintenanceFlag.checked = true;
+              updateMaintenanceDisplay();
+            }
+          }
+        }
+      });
+    });
+
+    const btn = document.getElementById('btnCopy');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      const plainte = (document.getElementById('plainte_client')?.value || '').trim();
+      const diag    = (document.getElementById('diagnostic')?.value || '').trim();
+      const rep     = (document.getElementById('reparation')?.value || '').trim();
+      const chkEl   = document.getElementById('deplacement_domicile')
+                    || document.querySelector('input[name="deplacement_domicile"]');
+
+      const deplacementChecked = !!(chkEl && (chkEl.checked || chkEl.getAttribute('aria-checked') === 'true'));
+
+      const leadLines = [];
+      const parts = [];
+      if (deplacementChecked) parts.push('Déplacement à domicile');
+      if (plainte) parts.push('Plainte client:\n' + plainte);
+      if (diag)    parts.push('Diagnostic:\n' + diag);
+      if (rep)     parts.push('Réparation:\n' + rep);
+
+      if (garantieFlag && garantieFlag.checked) {
+        const marqueLabel = (garantieBox?.getAttribute('data-marque') || 'Marque').trim() || 'Marque';
+        const gAdour = (document.getElementById('garantie_rapport_adour')?.value || '').trim();
+        const gMarque = (document.getElementById('garantie_rapport_marque')?.value || '').trim();
+        const gLines = [];
+        if (gAdour) gLines.push(`Rapport Adour N° ${gAdour}`);
+        if (gMarque) gLines.push(`Rapport ${marqueLabel} N° ${gMarque}`);
+        if (gLines.length) leadLines.push(...gLines);
+      }
+
+      if (maintenanceFlag && maintenanceFlag.checked) {
+        const mAdour = (document.getElementById('maintenance_rapport_adour')?.value || '').trim();
+        const mMol   = (document.getElementById('maintenance_rapport_mol')?.value || '').trim();
+        const mSol   = (document.getElementById('maintenance_rapport_sol')?.value || '').trim();
+        const mRev   = (document.getElementById('maintenance_revision_objet')?.value || '').trim();
+        const mDesc  = (document.getElementById('maintenance_revision_desc')?.value || '').trim();
+        const mLines = [];
+        if (mAdour) mLines.push(`Rapport Adour N° ${mAdour}`);
+        if (mMol)   mLines.push(`Rapport MOL N° ${mMol}`);
+        if (mSol)   mLines.push(`Rapport SOL N° ${mSol}`);
+        if (mLines.length) leadLines.push(...mLines);
+        if (mRev) parts.push(`Révision des ${mRev}`);
+        if (mDesc) parts.push('Descriptif révision:\n' + mDesc);
+      }
+
+      const blocks = [];
+      if (leadLines.length) blocks.push(leadLines.join('\n'));
+      const allParts = [...blocks, ...parts];
+      const txt = allParts.join('\n\n').trim();
+      if (!txt) {
+        alert('Aucun contenu à copier.');
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(txt);
+        btn.textContent = 'Copié ✔';
+        setTimeout(()=>btn.textContent='Copier', 1500);
+      } catch(e) {
+        alert('Impossible de copier : ' + e.message);
+      }
+    });
+  })();
+</script>
+<script>
+  // Date du jour en dd/mm/aaaa si vide
+  (function () {
+    const el = document.getElementById('date_jour');
+    if (el && !el.value) {
+      const d = new Date();
+      const p = n => String(n).padStart(2, '0');
+      el.value = `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`;
+    }
+  })();
+</script>
+
+{% endblock %}

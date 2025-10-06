@@ -1,0 +1,404 @@
+{% extends "base.html" %}
+{% block title %}Intervention XML — Détail{% endblock %}
+{% block content %}
+
+<div class="page--detail">
+  <h1>Détail de l'intervention</h1>
+
+  {% if request.query_params.get('saved') == '1' %}
+    <div class="alert success" style="margin:10px 0">✔️ Intervention enregistrée (Narrosse/Peyrehorade).</div>
+  {% elif request.query_params.get('saved') == '0' %}
+    <div class="alert warning" style="margin:10px 0">⚠️ Aucune ligne mise à jour dans la table cible (vérifie l'atelier et le numéro).</div>
+  {% endif %}
+  {% if request.query_params.get('msg') == 'site-inconnu' %}
+    <div class="alert warning" style="margin:10px 0">⚠️ Atelier/Site non reconnu ⇒ impossible de choisir Narrosse/Peyrehorade.</div>
+  {% endif %}
+
+  <p><a class="btn btn-secondary" href="/interventions-xml">← Retour à la liste</a>
+  <!-- <p>
+    <button class="btn" id="btn-garantie" type="button">➕ Saisir la garantie</button>
+  </p> -->
+<a class="btn"
+   href="/garanties/new?from_intervention={{ rowid }}"
+   target="_blank" rel="noopener noreferrer">
+  ➕ Créer une garantie préremplie
+</a>
+
+  <script>
+    (function(){
+      const q = (sel) => document.querySelector(sel);
+      document.getElementById('btn-garantie')?.addEventListener('click', () => {
+        const getVal = (name) => (q(`[name="${name}"]`)?.value || "").trim();
+        const nOr = (q('input[readonly][value]')?.value || "").trim(); // fallback: first readonly input is Numéro long
+        const client = (q('input[readonly]')?.value || "").trim();
+        const machine = getVal('libelle_court');
+        const type = getVal('type_op');
+        const dateOr = getVal('date_base') || getVal('date_or') || "";
+        const params = new URLSearchParams({ n_or: nOr, client, machine, date_or: dateOr, type });
+        window.open("/garanties?" + params.toString(), "_blank", "noopener");
+      });
+    })();
+  </script>
+
+  <div class="tabs">
+    <button class="btn" type="button" data-tab="tab-infos">Infos</button>
+    <button class="btn btn-secondary" type="button" data-tab="tab-travaux">Travaux</button>
+  </div>
+
+<section id="tab-infos" class="card tab-pane">
+  <h2>Informations</h2>
+  {% if site_val %}
+    <p class="muted" style="margin-top:-6px">Atelier détecté : <strong>{{ site_val }}</strong></p>
+  {% endif %}
+
+  <!-- FORMULAIRE D'ENREGISTREMENT -->
+  <form method="post" action="/interventions-xml/item/{{ rowid }}/save">
+    <div class="grid-2">
+      <div>
+        <label class="label">Numéro (short)</label>
+        <input class="input" type="text" value="{{ num_short or '' }}">
+        <small class="muted">Narrosse = 5 derniers · Peyrehorade = 4 derniers.</small>
+      </div>
+      <div>
+        <label class="label">Numéro (base)</label>
+        <input class="input" type="text" value="{{ num_base or '' }}" readonly>
+      </div>
+      <div>
+        <label class="label">Type</label>
+        <select class="input" name="type_op">
+          <option value=""></option>
+          {% set _sel = (type_op_selected or '') %}
+          {% for opt in [
+            "FACTURABLE",
+            "GARANTIE",
+            "MAXI CARE",
+            "CESSION",
+            "OS",
+            "ENTRETIEN PREVENTIF",
+            "AVOIR",
+            "MALFACON",
+            "AFFAIRE COMMERCIALE",
+            "SUPPRIMER",
+            "CAMPA CARE",
+            "LOCATION CLAAS",
+            "GARANTIE OCCASION",
+            "ASSURANCE"
+          ] %}
+            <option value="{{ opt }}" {{ 'selected' if _sel==opt else '' }}>{{ opt }}</option>
+          {% endfor %}
+        </select>
+        {% if type_op_selected %}
+          <small class="muted">Prérempli via code cession → <strong>{{ type_op_selected }}</strong></small>
+        {% endif %}
+      </div>
+
+      <div>
+        <label class="label">Date OR</label>
+        <input class="input" type="text"
+               value="{{ row.get('Date') or row.get('Date_Deb_Trav') or row.get('Date_Creation') or row.get('Date_Ouverture') or '' }}"
+               readonly />
+      </div>
+
+      <!-- *** MODIFIABLE *** -->
+      <div>
+        <label class="label">Date Clôture (jj/mm/aaaa)</label>
+        <input class="input" id="date_jour" name="date_jour" placeholder="jj/mm/aaaa" />
+      </div>
+
+      <div>
+        <label class="label">Nom</label>
+        <input class="input" type="text" value="{{ row.get('Nom') or row.get('Client') or row.get('Raison_Sociale') or '' }}" readonly />
+      </div>
+
+      <!-- *** MODIFIABLE *** -->
+      <div>
+        <label class="label">Machine</label>
+        <input class="input" name="libelle_court"
+               value="{{ row.get('Libellé_Court') or row.get('Libelle_Court') or '' }}" />
+      </div>
+
+      <!-- *** MODIFIABLE *** -->
+      <div class="col-span-2">
+        <label class="label">Pannes</label>
+        <textarea class="input" name="notes" rows="3">{{ row.get('Notes') or row.get('Note') or row.get('Commentaire') or row.get('Commentaires') or '' }}</textarea>
+      </div>
+    </div>
+
+    <button class="btn">Enregistrer intervention</button>
+  </form>
+</section>
+
+  <section id="tab-travaux" class="card tab-pane" style="display:none">
+    <!-- Onglet Travaux -->
+    <div id="tab-travaux" class="tab-panel">
+      <div class="card" style="margin-bottom:12px">
+        <h3 style="margin:0 0 8px">Travaux (XML)</h3>
+        <div style="
+             border:1px solid #ddd; border-radius:8px; padding:12px;
+             white-space:pre-wrap; line-height:1.4; font-size:1.05rem;">
+          {{ travaux_xml or "—" }}
+        </div>
+      </div>
+    
+      <label style="display:flex; gap:8px; align-items:center; font-size:1.05rem; margin:8px 0 12px;">
+        <input type="checkbox" name="deplacement_domicile" value="1">
+        <span>Déplacement à domicile</span>
+      </label>
+      </div>
+      <div class="field-with-tools">
+  <div class="label-row">
+    <label class="label">Plainte client</label>
+    <div class="tools">
+      <button type="button" class="btn btn-light" data-spell="#plainte_client" title="Vérifier l'orthographe (navigateur)">ABC</button>
+      <button type="button" class="btn btn-secondary" data-polish="#plainte_client" title="Rédiger proprement">✍️ Rédiger proprement</button>
+    </div>
+  </div>
+  <textarea class="input" id="plainte_client" rows="4" style="width:100%" spellcheck="true" lang="fr"></textarea>
+</div>
+
+<div class="field-with-tools">
+  <div class="label-row">
+    <label class="label">Diagnostic</label>
+    <div class="tools">
+      <button type="button" class="btn btn-light" data-spell="#diagnostic" title="Vérifier l'orthographe (navigateur)">ABC</button>
+      <button type="button" class="btn btn-secondary" data-polish="#diagnostic" title="Rédiger proprement">✍️ Rédiger proprement</button>
+      <button type="button" class="btn" data-template="diagnostic" data-target="#diagnostic" title="Insérer un modèle">📄 Modèle</button>
+    </div>
+  </div>
+  <textarea class="input" id="diagnostic" rows="4" style="width:100%" spellcheck="true" lang="fr"></textarea>
+</div>
+
+<div class="field-with-tools">
+  <div class="label-row">
+    <label class="label">Réparation</label>
+    <div class="tools">
+      <button type="button" class="btn btn-light" data-spell="#reparation" title="Vérifier l'orthographe (navigateur)">ABC</button>
+      <button type="button" class="btn btn-secondary" data-polish="#reparation" title="Rédiger proprement">✍️ Rédiger proprement</button>
+      <button type="button" class="btn" data-template="reparation" data-target="#reparation" title="Insérer un modèle">📄 Modèle</button>
+    </div>
+  </div>
+  <textarea class="input" id="reparation" rows="4" style="width:100%" spellcheck="true" lang="fr"></textarea>
+</div>
+
+    </div>
+
+    <div style="display:flex; gap:10px; margin-top:12px">
+      <button class="btn btn-secondary" type="button" id="btnCopy">Copier</button>
+    </div>
+  </section>
+</div>
+
+<style>
+  .field-with-tools { margin: 10px 0 14px; }
+  .label-row { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .label-row .tools { display:flex; gap:6px; flex-wrap:wrap; }
+  .pulse {
+    box-shadow: 0 0 0 3px rgba(80,120,255,.25);
+    transition: box-shadow .3s ease;
+  }
+</style>
+<script>
+/** --------- Aide rédaction & orthographe (client-side) ---------- **/
+
+// Polissage simple FR : espaces insécables avant ; : ? !, majuscules début phrase, points finaux, etc.
+function polishFrenchText(s) {
+  if (!s) return "";
+  let t = s;
+
+  // Normalisations de base
+  t = t.replace(/\r\n?/g, "\n").replace(/[ \t]+\n/g, "\n");     // trim fin de ligne
+  t = t.replace(/[ \t]{2,}/g, " ");                             // espaces multiples
+  t = t.replace(/\n{3,}/g, "\n\n");                              // trop de lignes vides
+
+  // Espaces avant ; : ? ! (fine / insécable -> on met une espace simple pour compatibilité)
+  t = t.replace(/\s*([;:?!»])/g, " $1");
+  // Espaces après «  et avant » (typo FR classique)
+  t = t.replace(/«\s*/g, "« ").replace(/\s*»/g, " »");
+
+  // Capitaliser début de phrase
+  t = t.replace(/(^|[.!?]\s+)([a-zàâçéèêëîïôûùüÿñœ])/g, (m, p1, p2) => p1 + p2.toUpperCase());
+
+  // Ajouter un point final si la dernière ligne ressemble à une phrase sans ponctuation
+  t = t.replace(/([^\s.?!])\s*$/m, "$1.");
+
+  // Tirets -> puces si la ligne commence par "-" ou "•"
+  const lines = t.split("\n").map(l => l.trimEnd());
+  for (let i=0; i<lines.length; i++) {
+    if (/^-\s+/.test(lines[i])) lines[i] = "• " + lines[i].replace(/^-+\s+/, "");
+  }
+  t = lines.join("\n");
+
+  // Nettoyer espaces avant ponctuation double
+  t = t.replace(/\s+([;:?!])/g, " $1");
+
+  // Trim global
+  t = t.trim();
+  return t;
+}
+
+// Modèles prêts à l'emploi
+const templates = {
+  diagnostic: `Constat :
+• …
+
+Hypothèses :
+• …
+
+Tests effectués :
+• …
+
+Conclusion :
+• …`,
+
+  reparation: `Actions réalisées :
+• …
+
+Pièces remplacées :
+• …
+
+Réglages / Paramétrage :
+• …
+
+Résultat :
+• Bon fonctionnement constaté, essai sur …, conforme.` 
+};
+
+// Focus + rappel visuel pour le correcteur navigateur
+function nudgeSpellcheck(target) {
+  const el = document.querySelector(target);
+  if (!el) return;
+  el.setAttribute("spellcheck", "false");
+  // petite bascule pour relancer la détection
+  requestAnimationFrame(() => {
+    el.setAttribute("spellcheck", "true");
+    el.focus();
+    // petit effet "pulse"
+    el.classList.add("pulse");
+    setTimeout(() => el.classList.remove("pulse"), 900);
+  });
+  // toast simple
+  try {
+    const msg = document.createElement("div");
+    msg.textContent = "Les fautes sont soulignées par votre navigateur.";
+    Object.assign(msg.style, {
+      position: "fixed", bottom: "14px", right: "14px",
+      background: "#222", color: "#fff", padding: "8px 10px",
+      borderRadius: "8px", fontSize: "14px", opacity: "0.95", zIndex: 9999
+    });
+    document.body.appendChild(msg);
+    setTimeout(()=> msg.remove(), 1600);
+  } catch {}
+}
+
+// Attache les boutons
+(function attachWritingHelpers(){
+  // ABC (vérification orthographique)
+  document.querySelectorAll('[data-spell]').forEach(btn=>{
+    btn.addEventListener('click', () => {
+      const sel = btn.getAttribute('data-spell');
+      nudgeSpellcheck(sel);
+    });
+  });
+
+  // ✍️ Rédiger proprement
+  document.querySelectorAll('[data-polish]').forEach(btn=>{
+    btn.addEventListener('click', () => {
+      const sel = btn.getAttribute('data-polish');
+      const el = document.querySelector(sel);
+      if (!el) return;
+      const before = el.value;
+      const after = polishFrenchText(before);
+      el.value = after;
+      // feedback
+      btn.textContent = '✔️ Poli';
+      setTimeout(()=> btn.textContent = '✍️ Rédiger proprement', 1200);
+    });
+  });
+
+  // 📄 Modèles
+  document.querySelectorAll('[data-template]').forEach(btn=>{
+    btn.addEventListener('click', () => {
+      const key = btn.getAttribute('data-template');
+      const target = btn.getAttribute('data-target');
+      const el = document.querySelector(target);
+      if (!el) return;
+      const base = templates[key] || "";
+      // On n'écrase pas si déjà du texte : on insère en-dessous
+      el.value = (el.value && el.value.trim().length>0) 
+        ? (el.value.trimEnd() + "\n\n" + base) 
+        : base;
+      el.focus();
+    });
+  });
+})();
+</script>
+
+<script>
+  (function(){
+    const el = document.getElementById('today');
+    if (el) {
+      const d = new Date();
+      const pad = n => String(n).padStart(2,'0');
+      el.value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+  })();
+
+  (function(){
+    const buttons = document.querySelectorAll('[data-tab]');
+    function showTab(id){
+      document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+      const pane = document.getElementById(id);
+      if (pane) pane.style.display = '';
+      buttons.forEach(b => b.classList.toggle('btn-secondary', b.getAttribute('data-tab') !== id));
+    }
+    buttons.forEach(b => b.addEventListener('click', () => showTab(b.getAttribute('data-tab'))));
+    showTab('tab-infos');
+  })();
+</script>
+<script>
+  (function(){
+    const btn = document.getElementById('btnCopy');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      // fallback robuste : par id OU par name
+      const chkEl   = document.getElementById('deplacement_domicile')
+                    || document.querySelector('input[name="deplacement_domicile"]');
+      const base    = (document.getElementById('travaux_xml')?.value || '').trim();
+      const plainte = (document.getElementById('plainte_client')?.value || '').trim();
+      const diag    = (document.getElementById('diagnostic')?.value || '').trim();
+      const rep     = (document.getElementById('reparation')?.value || '').trim();
+
+      // état coché (gère aussi aria-checked si jamais un UI custom est utilisé)
+      const deplacementChecked = !!(chkEl && (chkEl.checked || chkEl.getAttribute('aria-checked') === 'true'));
+
+      const parts = [];
+      if (base) parts.push(base);                               // pas d'entête
+      if (deplacementChecked) parts.push('Déplacement à domicile'); // seulement si coché
+      if (plainte) parts.push('Plainte client:\n' + plainte);
+      if (diag)    parts.push('Diagnostic:\n' + diag);
+      if (rep)     parts.push('Réparation:\n' + rep);
+
+      const txt = parts.join('\n\n');
+      try {
+        await navigator.clipboard.writeText(txt);
+        btn.textContent = 'Copié ✔';
+        setTimeout(()=>btn.textContent='Copier', 1500);
+      } catch(e) {
+        alert('Impossible de copier : ' + e.message);
+      }
+    });
+  })();
+</script>
+<script>
+  // Date du jour en dd/mm/aaaa si vide
+  (function () {
+    const el = document.getElementById('date_jour');
+    if (el && !el.value) {
+      const d = new Date();
+      const p = n => String(n).padStart(2, '0');
+      el.value = `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}`;
+    }
+  })();
+</script>
+
+{% endblock %}

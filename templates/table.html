@@ -1,0 +1,167 @@
+
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+
+{% if error %}
+<div class="alert">{{ error }}</div>
+{% endif %}
+
+{# ---- Filtres spécifiques au registre garantie ---- #}
+{% if request.url.path.startswith('/registre-garantie') %}
+<form method="get" class="controls" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0 12px">
+  <label>Exercice:
+    <select name="ex" class="select" onchange="this.form.submit()">
+      <option value="">Tous</option>
+      {% for e in ex_list %}
+        <option value="{{ e }}" {% if ex is not none and ex == e %}selected{% endif %}>{{ e }} (01/10/{{ e-1 }} → 30/09/{{ e }})</option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label>Statut:
+    <select name="etat" class="select" onchange="this.form.submit()">
+      <option value="">Tous</option>
+      <option value="non_paye" {% if etat == 'non_paye' %}selected{% endif %}>Non payés</option>
+      <option value="paye" {% if etat == 'paye' %}selected{% endif %}>Payés</option>
+    </select>
+  </label>
+<label>Type:
+  <select name="gtype" class="select" onchange="this.form.submit()">
+    <option value="">Tous</option>
+    {% for opt in (type_options or []) %}
+      <option value="{{ opt }}" {% if gtype and gtype == opt %}selected{% endif %}>{{ opt }}</option>
+    {% endfor %}
+  </select>
+</label>
+
+  {% if q %}<input type="hidden" name="q" value="{{ q|e }}">{% endif %}
+  <input type="hidden" name="sort_col" value="{{ sort_col or '' }}">
+  <input type="hidden" name="sort_dir" value="{{ sort_dir or 'asc' }}">
+  {% for k,v in (filters or {}).items() %}
+    {% if v %}<input type="hidden" name="c_{{ k|urlencode }}" value="{{ v|e }}">{% endif %}
+  {% endfor %}
+  <a class="btn btn-secondary" href="{{ request.url.path }}">Réinitialiser</a>
+</form>
+{% endif %}
+
+<div class="controls" style="margin-top:6px">
+  <button id="openSearch" class="btn">Rechercher</button>
+  {% if q %}
+    <span class="badge">Filtre global: "{{ q }}"</span>
+    <a class="btn btn-secondary" id="clearSearch">Effacer</a>
+  {% endif %}
+  <a class="btn btn-secondary clear-filters">Effacer filtres colonnes</a>
+</div>
+
+{% if columns|length == 0 %}
+  <em>Aucune colonne à afficher.</em>
+{% else %}
+
+{% set sc = sort_col or '' %}
+{% set sd = sort_dir or 'asc' %}
+
+{% macro sort_link(real_col) -%}
+  {%- if not real_col -%}#{%- else -%}
+    {{ request.url.path }}?sort_col={{ real_col | urlencode }}&sort_dir={{ 'desc' if sc==real_col and sd=='asc' else 'asc' }}
+    {%- if q %}&q={{ q|urlencode }}{% endif -%}
+    {%- for k,v in (filters or {}).items() %}{% if v %}&c_{{ k|urlencode }}={{ v|urlencode }}{% endif %}{% endfor -%}
+    {%- if request.url.query and not request.url.query.startswith('sort_col=') -%}&{{ request.url.query }}{%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+<div class="table-area">
+  <div class="hscroll-top" data-hscroll-top></div>
+  <div class="table-wrapper" data-table-wrapper>
+
+    <table class="table" class="app-table">
+      <thead>
+        <tr>
+          {% for c in columns %}
+            {% set is_sorted = (sc == c) %}
+            <th>
+              <a href="{{ sort_link(c) or '#' }}">
+                {% set display = (labels.get(c) if labels else c) %}
+                {{ display|replace('\n',' ') }}
+                {% if is_sorted %}
+                  <span class="arrow">{{ '▲' if sd == 'asc' else '▼' }}</span>
+                {% endif %}
+              </a>
+            </th>
+          {% endfor %}
+        </tr>
+      </thead>
+
+
+      <tbody>
+        {% if request.url.path.startswith('/registre-garantie') %}
+          {% for row in rows %}
+            <tr class="click-row" onclick="location.href='/garanties/u/{{ row_keys[loop.index0]|urlencode }}'">
+              {% for i in range(columns|length) %}
+                {% set cell = row[i] %}
+                {% if cell is string and (cell|length) >= 10 and cell[4] == '-' and cell[7] == '-' %}
+                  {% set d = cell[:10] %}
+                  <td>{{ d[8:10] ~ '/' ~ d[5:7] ~ '/' ~ d[0:4] }}</td>
+                {% else %}
+                  <td>{{ cell if cell is not none else "" }}</td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        {% else %}
+          {% for row in rows %}
+            <tr>
+              {% for i in range(columns|length) %}
+                {% set cell = row[i] %}
+                <td>{{ cell if cell is not none else "" }}</td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        {% endif %}
+        {% if rows|length == 0 %}
+          <tr><td colspan="{{ columns|length }}"><em>Aucune donnée</em></td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+
+  </div>
+</div>
+
+{% endif %}
+
+<script>
+// simple UI helpers
+document.addEventListener('DOMContentLoaded', function(){
+  var cfBtn = document.querySelector('.clear-filters');
+  if (cfBtn) cfBtn.addEventListener('click', function(){
+    document.querySelectorAll('.col-filter').forEach(function(inp){ inp.value = ''; });
+    const url = new URL(window.location.href);
+    [...url.searchParams.keys()].forEach(k => { if (k.startsWith('c_')) url.searchParams.delete(k); });
+    window.location.href = url.pathname + '?' + url.searchParams.toString().replace(/^[?]/,'');
+  });
+  document.querySelectorAll('.col-filter').forEach(function(inp){
+    inp.addEventListener('change', function(){
+      const url = new URL(window.location.href);
+      const key = 'c_' + inp.getAttribute('data-col');
+      if (inp.value) url.searchParams.set(key, inp.value);
+      else url.searchParams.delete(key);
+      window.location.href = url.pathname + '?' + url.searchParams.toString().replace(/^[?]/,'');
+    });
+  });
+  var clear = document.getElementById('clearSearch');
+  if (clear) clear.addEventListener('click', function(){
+    const url = new URL(window.location.href);
+    url.searchParams.delete('q');
+    window.location.href = url.pathname + '?' + url.searchParams.toString().replace(/^[?]/,'');
+  });
+});
+</script>
+
+<style>
+.click-row { cursor: pointer; }
+.click-row:hover { background: #f9fafb; }
+.filters-row input.col-filter { width: 100%; box-sizing: border-box; padding: 4px 6px; }
+</style>
+
+{% endblock %}

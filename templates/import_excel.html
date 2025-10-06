@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Import Excel{% endblock %}
+{% block content %}
+<h1>Import Excel (Narrosse / Peyrehorade / Garanties)</h1>
+<p>Le fichier doit contenir ces feuilles (si présentes elles seront importées) :</p>
+<ul>
+  {% for sheet, table in sheet_map.items() %}
+    <li><strong>{{ sheet }}</strong> → {{ table }}</li>
+  {% endfor %}
+</ul>
+<form action="/import-excel" method="post" enctype="multipart/form-data">
+  <input type="file" name="file" required />
+  <button class="btn" type="submit">Importer</button>
+</form>
+{% endblock %}

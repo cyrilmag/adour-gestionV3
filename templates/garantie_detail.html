@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}{{ title or ("Garantie — " ~ (record.get("N°") or "")) }}{% endblock %}
+
+{% block content %}
+<style>
+  .tabs { display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .tab-btn { padding:8px 10px; border:1px solid #ddd; border-bottom:none; border-radius:10px 10px 0 0; background:#f7f7f7; cursor:pointer; }
+  .tab-btn.active { background:#fff; font-weight:600; }
+  .tab { display:none; border:1px solid #ddd; border-radius:0 10px 10px 10px; padding:12px; }
+  .tab.active { display:block; }
+
+  .grid-two { display:grid; grid-template-columns:1fr; gap:12px; }
+  @media (min-width: 900px) { .grid-two { grid-template-columns:1fr 1fr; } }
+
+  .grid-three { display:grid; grid-template-columns:1fr; gap:12px; }
+  @media (min-width: 900px) { .grid-three { grid-template-columns:1fr 1fr 1fr; } }
+
+  .label { font-weight:600; margin-bottom:4px; display:block; }
+  .input, .textarea, .select { width:100%; box-sizing:border-box; padding:10px 12px; }
+  .textarea { min-height:120px; }
+  .muted { opacity:.7; font-size:.9em; }
+  .readonly { background:#fafafa; }
+  .card { background:#fff; border:1px solid #eee; border-radius:12px; padding:12px; }
+</style>
+
+<h1>{{ title or "Garantie" }}</h1>
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+{% if saved %}<div class="alert success">Modifications enregistrées.</div>{% endif %}
+
+{% set pk = record.get('_pk_col', 'N°') %}
+{% set numero_actuel = record.get(pk) or record.get('N°') or '' %}
+
+{% set hide = UI_HIDE or [] %}
+{% set ro = UI_READONLY or [] %}
+{% set tabs_def = UI_TABS or [] %}
+{% set labels = UI_LABELS or {} %}
+{% set helps = UI_HELP or {} %}
+{% set widgets = UI_WIDGETS or {} %}
+{% set phs = UI_PLACEHOLDERS or {} %}
+
+{% set visible = namespace(cols=[]) %}
+{% for c in cols %}{% if c not in hide %}{% set _ = visible.cols.append(c) %}{% endif %}{% endfor %}
+
+{% set tabs = namespace(items=[]) %}
+{% set assigned = namespace(cols=[]) %}
+
+{% for pair in tabs_def %}
+  {% set tab_name = pair[0] %}{% set fields = pair[1] %}{% set ex = namespace(cols=[]) %}
+  {% for c in fields %}
+    {% if c in visible.cols and c not in assigned.cols %}
+      {% set _ = ex.cols.append(c) %}{% set _ = assigned.cols.append(c) %}
+    {% endif %}
+  {% endfor %}
+  {% if ex.cols|length %}{% set _ = tabs.items.append( (tab_name, ex.cols) ) %}{% endif %}
+{% endfor %}
+
+{% set rest = namespace(cols=[]) %}
+{% for c in visible.cols %}{% if c not in assigned.cols %}{% set _ = rest.cols.append(c) %}{% endif %}{% endfor %}
+{% if rest.cols|length %}{% set _ = tabs.items.append( ("Autres", rest.cols) ) %}{% endif %}
+
+<form method="post" action="/garanties/item/{{ numero_actuel }}">
+  <div class="tabs" id="tabs">
+    {% for t in tabs.items %}{% set name = t[0] %}
+      <button type="button" class="tab-btn {{ 'active' if loop.first }}" data-tab="tab{{ loop.index }}">{{ name }}</button>
+    {% endfor %}
+  </div>
+
+  {% for t in tabs.items %}
+    {% set name = t[0] %}{% set fields = t[1] %}
+    <div class="tab {{ 'active' if loop.first }}" id="tab{{ loop.index }}">
+      <div class="{{ 'grid-three' if name == "Pièces et Main d'Oeuvre" else 'grid-two' }}">
+        {% for c in fields %}
+          {% set val = (record.get(c) or '') %}
+          {% set lc = c|lower %}
+          {% set label = labels.get(c) or c %}
+          {% set help = helps.get(c) %}
+          {% set widget = widgets.get(c) or "text" %}
+          {% set ph = phs.get(c) or '' %}
+          {% set is_long = val and (val|string)|length > 120 %}
+
+          <div class="card">
+            {# ——— label affiché pour tous les widgets ——— #}
+            <label class="label">{{ label }}</label>
+
+            {% if widget == "textarea" or lc in ["commentaire","observations","notes","note","panne","details","description"] or is_long %}
+              <textarea name="{{ c }}" class="textarea {{ 'readonly' if c in ro }}" {% if c in ro %}readonly{% endif %} placeholder="{{ ph }}">{{ val }}</textarea>
+
+            {% elif widget == "select-yesno" %}
+              <select name="{{ c }}" class="select" {% if c in ro %}disabled{% endif %}>
+                <option value="" {{ ""==val and "selected" or "" }}>—</option>
+                <option value="0" {{ ("0"==val) and "selected" or "" }}>Non</option>
+                <option value="1" {{ ("1"==val) and "selected" or "" }}>Oui</option>
+              </select>
+              {% if c in ro %}<input type="hidden" name="{{ c }}" value="{{ val }}">{% endif %}
+
+            {% elif widget == "select-typegarantie" %}
+              {% set options = TYPE_GARANTIE_OPTIONS or [] %}
+              {# ancien hardcode supprimé : options dynamiques depuis la base #}
+              {#
+                "GARANTIE PIECES","PARTICIPATION COMMERCIALE","OS","GARANTIE COMMERCIALE",
+                "MOL","SOL","INCIDENT","GARANTIE","MAXI CARE","GARANTIE AMAZONE",
+                "GARANTIE MASHIO","CAMPA CARE","MOL CLAAS LOCATION","SOL CLAAS LOCATION",
+                "VISITE FIN GARANTIE","GARANTIE MAUGUIN","GARANTIE ROUSSEAU",
+                "Amazone Ticket service","GARANTIE ALO"
+              #}
+              <select name="{{ c }}" class="select" {% if c in ro %}disabled{% endif %}>
+                <option value=""></option>
+                {% for opt in options %}
+                  <option value="{{ opt }}" {{ 'selected' if val == opt else '' }}>{{ opt }}</option>
+                {% endfor %}
+              </select>
+              {% if c in ro %}<input type="hidden" name="{{ c }}" value="{{ val }}">{% endif %}
+
+            {% elif widget == "rebus-indicator" %}
+              <div style="display:flex; align-items:center; gap:10px;">
+                <div class="label" style="margin:0;">Piéces mise au rebus</div>
+                <span id="rebus_indicator" class="muted">—</span>
+              </div>
+              <input type="hidden" name="{{ c }}" id="rebus_flag" value="{{ (record.get(c) or '') }}">
+
+            {% elif widget == "number" %}
+              <input type="number" step="any" name="{{ c }}" class="input {{ 'readonly' if c in ro }}" value="{{ val }}" {% if c in ro %}readonly{% endif %} placeholder="{{ ph }}">
+
+            {% elif widget == "date" %}
+              <input type="text" name="{{ c }}" class="input {{ 'readonly' if c in ro }}"
+                     value="{{ val }}" placeholder="{{ ph or 'jj/mm/aaaa' }}"
+                     {% if c in ro %}readonly{% endif %}
+                     ondblclick="fillToday(this)">
+
+            {% else %}
+              <input name="{{ c }}" class="input {{ 'readonly' if c in ro }}" value="{{ val }}" {% if c in ro %}readonly{% endif %} placeholder="{{ ph }}">
+            {% endif %}
+
+            {% if help %}<div class="muted" style="margin-top:4px">{{ help }}</div>{% endif %}
+            {% if c in ro %}<div class="muted">Lecture seule</div>{% endif %}
+
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  {% endfor %}
+
+  <div style="margin-top:12px; display:flex; gap:8px;">
+    <button class="btn" type="submit">Enregistrer</button>
+    <a class="btn btn-secondary" href="/registre-garantie">Retour liste</a>
+  </div>
+</form>
+
+<script>
+  // Tabs
+  const btns = document.querySelectorAll('.tab-btn');
+  const tabs = document.querySelectorAll('.tab');
+  btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      btns.forEach(b => b.classList.remove('active'));
+      tabs.forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(btn.dataset.tab).classList.add('active');
+    });
+  });
+  // Double-clic → date du jour jj/mm/aaaa
+  function fillToday(el) {
+    const now = new Date();
+    const d = String(now.getDate()).padStart(2,'0');
+    const m = String(now.getMonth()+1).padStart(2,'0');
+    el.value = `${d}/${m}/${now.getFullYear()}`;
+  }
+</script>
+<script>
+(function(){
+  function byName(n){ return document.querySelector('[name="'+n+'"]'); }
+
+  // ---- Parse/format dates jj/mm/aaaa
+  function parseFRDate(s){
+    if(!s) return null;
+    s = String(s).trim();
+    const m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+    if(!m) return null;
+    const d = parseInt(m[1],10), mo = parseInt(m[2],10)-1, y = parseInt(m[3],10);
+    const dt = new Date(y, mo, d);
+    return isNaN(dt) ? null : dt;
+  }
+  function formatFRDate(d){
+    const p = n => String(n).padStart(2,'0');
+    return d ? `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()}` : "";
+  }
+  function addDays(date, days){
+    const d = new Date(date.getTime());
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+
+  // ---- Champs
+  const elDateDemande = byName("Date");                // "Date" = Date de la demande
+  const elEmplacement = byName("Emplacement");
+  const elDatePaiement= byName("date paiement");
+  const elDateRebus   = byName("Date rebus");
+  let   elRebusFlag   = document.getElementById("rebus_flag");
+  const elRebusInd    = document.getElementById("rebus_indicator");
+
+  // Sécurité : recrée le hidden s'il a disparu
+  if(!elRebusFlag && elRebusInd){
+    elRebusFlag = document.createElement('input');
+    elRebusFlag.type = 'hidden';
+    elRebusFlag.name = "Piéces mise au rebus";
+    elRebusFlag.id   = "rebus_flag";
+    elRebusInd.insertAdjacentElement('afterend', elRebusFlag);
+  }
+
+  // ---- 1) Emplacement = mois(Date) => MM/YYYY
+  function updateEmplacement(){
+    if(!elDateDemande || !elEmplacement) return;
+    const d = parseFRDate(elDateDemande.value);
+    if(!d) return;
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    const yyyy = d.getFullYear();
+    elEmplacement.value = `${mm}/${yyyy}`;
+  }
+
+  // ---- 2) Date rebus = date paiement + 90 jours
+  function updateDateRebus(){
+    if(!elDatePaiement || !elDateRebus) return;
+    const dp = parseFRDate(elDatePaiement.value);
+    if(!dp) return;
+    const d90 = addDays(dp, 90);
+    elDateRebus.value = formatFRDate(d90);
+    updateRebusIndicator(); // recalcule l'icône
+  }
+
+  // ---- 3) Indicateur rebus : ✅ si aujourd'hui >= date rebus, sinon ❌
+  function updateRebusIndicator(){
+    if(!elDateRebus || !elRebusInd || !elRebusFlag) return;
+    const dr = parseFRDate(elDateRebus.value);
+    if(!dr){
+      elRebusInd.textContent = "—";
+      elRebusFlag.value = "";
+      return;
+    }
+    const today = new Date(); today.setHours(0,0,0,0);
+    dr.setHours(0,0,0,0);
+    const passed = (today.getTime() >= dr.getTime());
+    elRebusInd.textContent = passed ? "✅" : "❌";
+    elRebusFlag.value = passed ? "1" : "0";
+  }
+
+  // ---- Listeners
+  if(elDateDemande){ ["input","change","blur"].forEach(e=>elDateDemande.addEventListener(e, updateEmplacement)); }
+  if(elDatePaiement){ ["input","change","blur"].forEach(e=>elDatePaiement.addEventListener(e, updateDateRebus)); }
+  if(elDateRebus){ ["input","change","blur"].forEach(e=>elDateRebus.addEventListener(e, updateRebusIndicator)); }
+
+  // ---- Initialisation au chargement
+  updateEmplacement();
+  updateDateRebus();
+  updateRebusIndicator();
+
+  // ---- Sécurité: recalcul au submit
+  const form = document.querySelector('form[action^="/garanties/item/"]') || document.querySelector('form');
+  if(form){
+    form.addEventListener('submit', () => {
+      updateEmplacement();
+      updateDateRebus();
+      updateRebusIndicator();
+    });
+  }
+})();
+/* garanties-autocalc */
+document.addEventListener('DOMContentLoaded', function(){
+  function q(name){ return document.querySelector('[name="'+name+'"]'); }
+  const f = {
+    pd: q('Pieces_Demandes'),
+    pr: q('Pieces_Rembourses'),
+    md: q('MO_Demande'),
+    mr: q('MO_Rembourse'),
+    pref: q('Pieces_Refuses'),
+    moref: q('MO_Refuse'),
+    nonremb: q('Montant_non_rembourse')
+  };
+  ['pref','moref','nonremb'].forEach(k => { if (f[k]) f[k].readOnly = true; });
+  function parseNum(v){
+    if (v==null) return 0;
+    v = String(v).replace(/\s+/g,'').replace(',', '.');
+    const x = parseFloat(v);
+    return isNaN(x) ? 0 : x;
+  }
+  function fmt(x){
+    x = Math.max(0, x);
+    let s = (Math.round(x*100)/100).toFixed(2);
+    s = s.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+    return s;
+  }
+  function recalc(){
+    const pd = parseNum(f.pd && f.pd.value);
+    const pr = parseNum(f.pr && f.pr.value);
+    const md = parseNum(f.md && f.md.value);
+    const mr = parseNum(f.mr && f.mr.value);
+    if (f.pref)    f.pref.value    = fmt(pd - pr);
+    if (f.moref)   f.moref.value   = fmt(md - mr);
+    if (f.nonremb) f.nonremb.value = fmt((pd + md) - (pr + mr));
+  }
+  ['pd','pr','md','mr'].forEach(k => { if (f[k]) ['input','change','blur'].forEach(evt => f[k].addEventListener(evt, recalc)); });
+  recalc();
+});
+</script>
+
+{% endblock %}

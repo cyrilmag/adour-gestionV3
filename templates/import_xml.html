@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Import XML{% endblock %}
+{% block content %}
+<h1>Import XML (Interventions)</h1>
+<p>Le module importe toutes les balises des enregistrements en colonnes dans la table <code>interventions</code>.</p>
+<form action="/import-xml" method="post" enctype="multipart/form-data">
+  <input type="file" name="file" required />
+  <button class="btn" type="submit">Importer</button>
+</form>
+{% endblock %}

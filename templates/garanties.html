@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<style>
+  .table-responsive { overflow:auto; }
+  th a { text-decoration:none; color:inherit; }
+  th .sort { font-size: .9em; opacity: .7; }
+  .filters-row input { width:100%; box-sizing: border-box; padding:6px 8px; }
+  .click-row { cursor:pointer; }
+</style>
+
+<h1>{{ title }}</h1>
+
+<div class="controls" style="display:flex; gap:8px; align-items:center; margin:8px 0 12px;">
+  <form method="get" action="/garanties" style="display:flex; gap:8px; align-items:center;">
+    <input class="input" type="text" name="q" placeholder="Recherche globale (N°, Client, Machine, Type, Date OR)" value="{{ q or '' }}">
+    {% if sort_col %}<input type="hidden" name="sort_col" value="{{ sort_col }}">{% endif %}
+    {% if sort_dir %}<input type="hidden" name="sort_dir" value="{{ sort_dir }}">{% endif %}
+    <button class="btn" type="submit">Rechercher</button>
+    {% if q %}
+      <a class="btn btn-secondary" href="/garanties">Effacer</a>
+      <span class="badge">Filtre global : “{{ q }}”</span>
+    {% endif %}
+  </form>
+  <div style="margin-left:auto"></div>
+  <a class="btn btn-secondary" href="/garanties">Réinitialiser</a>
+</div>
+
+<div class="card" style="padding:12px; margin-bottom:14px;">
+  <div class="table-responsive">
+    <table class="table" style="width:100%">
+      <thead>
+        {% macro sort_link(label, colname) -%}
+          {%- set dir_cycle = 'asc' if sort_col != colname or sort_dir == 'desc' else 'desc' -%}
+          <a href="?sort_col={{ colname | urlencode }}&sort_dir={{ dir_cycle }}{% if q %}&q={{ q | urlencode }}{% endif %}
+          {% for c,v in filters.items() %}{% if v and c != colname %}&c_{{ c | replace(' ', '_') }}={{ v | urlencode }}{% endif %}{% endfor %}">
+            {{ label }}
+            {% if sort_col == colname %}
+              <span class="sort">({{ '↓' if sort_dir == 'desc' else '↑' }})</span>
+            {% endif %}
+          </a>
+        {%- endmacro %}
+
+        <tr>
+          <th style="width:90px">{{ sort_link('N°', 'N°') }}</th>
+          <th style="width:140px">{{ sort_link('Type', 'Type') }}</th>
+          <th>{{ sort_link('Client', 'Client') }}</th>
+          <th>{{ sort_link('Machine', 'Machine') }}</th>
+          <th style="width:140px">{{ sort_link('Date OR', 'Date OR') }}</th>
+        </tr>
+        <!-- Filtres par colonne -->
+        <tr class="filters-row">
+          <th>
+            <form method="get" action="/garanties">
+              <input type="text" name="c_N°" placeholder="Filtrer N°" value="{{ filters['N°'] }}">
+              <input type="hidden" name="sort_col" value="{{ sort_col }}">
+              <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+              {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+            </form>
+          </th>
+          <th>
+            <form method="get" action="/garanties">
+              <input type="text" name="c_Type" placeholder="Filtrer Type" value="{{ filters['Type'] }}">
+              <input type="hidden" name="sort_col" value="{{ sort_col }}">
+              <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+              {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+            </form>
+          </th>
+          <th>
+            <form method="get" action="/garanties">
+              <input type="text" name="c_Client" placeholder="Filtrer Client" value="{{ filters['Client'] }}">
+              <input type="hidden" name="sort_col" value="{{ sort_col }}">
+              <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+              {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+            </form>
+          </th>
+          <th>
+            <form method="get" action="/garanties">
+              <input type="text" name="c_Machine" placeholder="Filtrer Machine" value="{{ filters['Machine'] }}">
+              <input type="hidden" name="sort_col" value="{{ sort_col }}">
+              <input type="hidden" name="sort_dir" value="{{ sort_dir }}">
+              {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+            </form>
+          </th>
+          <th>
+            <form method="get" action="/garanties">
+              <input type="text" name="c_Date_OR" placeholder="Filtrer Date OR" value="{{ filters['Date OR'] }}">
+              <input type="hidden" name="sort_col" value="{{ sort_col }}">
+              <input type="hidden" name="sort_dir" value "{{ sort_dir }}">
+              {% if q %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+            </form>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr class="click-row" onclick="location.href='{{ r.__href__ }}'">
+            <td>{{ r["N°"] }}</td>
+            <td>{{ r["Type"] }}</td>
+            <td>{{ r["Client"] }}</td>
+            <td>{{ r["Machine"] }}</td>
+            <td>{{ r["Date OR"] }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5"><em>Aucune garantie trouvée.</em></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<form method="post" action="/garanties" class="card" style="padding:12px;">
+  <h2>Nouvelle garantie</h2>
+  <div class="grid" style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px;">
+    <div>
+      <label class="label">N°</label>
+      <input class="input" name="N°" value="{{ prefill['N°'] }}"/>
+    </div>
+    <div>
+      <label class="label">Type</label>
+      <input class="input" name="Type" value="{{ prefill['Type'] }}"/>
+    </div>
+    <div>
+      <label class="label">Client</label>
+      <input class="input" name="Client" value="{{ prefill['Client'] }}"/>
+    </div>
+    <div>
+      <label class="label">Machine</label>
+      <input class="input" name="Machine" value="{{ prefill['Machine'] }}"/>
+    </div>
+    <div>
+      <label class="label">Date OR</label>
+      <input class="input" name="Date OR" value="{{ prefill['Date OR'] }}" placeholder="JJ/MM/AAAA"/>
+    </div>
+    <!-- Ajoute ici d'autres colonnes si ta table en contient -->
+  </div>
+
+  <div style="margin-top:12px; display:flex; gap:8px;">
+    <button class="btn" type="submit">Enregistrer</button>
+    <a class="btn btn-secondary" href="/garanties">Réinitialiser formulaire</a>
+  </div>
+
+  {% if request.query_params.get('from_intervention') %}
+    <div class="alert" style="margin-top:10px;">
+      Prérempli depuis l'intervention ROWID = {{ request.query_params.get('from_intervention') }}
+    </div>
+  {% endif %}
+</form>
+
+<script>
+// Soumission auto des filtres par colonne au changement
+document.querySelectorAll('.filters-row input').forEach(inp => {
+  inp.addEventListener('change', (e) => {
+    e.target.form.submit();
+  });
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,201 @@
+{# templates/_maintenance_modal.html #}
+<style>
+  .modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 1000; display:none; }
+  .modal-dialog { margin: 5vh auto; background: white; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.2); max-width: 940px; }
+  .modal-header, .modal-footer { padding: 12px 16px; border-bottom: 1px solid #eee; }
+  .modal-footer { border-top: 1px solid #eee; border-bottom: none; }
+  .btn-close { background: none; border: 0; font-size: 20px; cursor:pointer; }
+  .task-title{
+    font-weight:700; margin:8px 0 6px; padding:4px 6px;
+    background:#f5f7fb; border-left:4px solid #5b8def; border-radius:6px;
+  }
+  .task-row { padding:6px 8px; border-bottom:1px dashed #eee; display:flex; gap:8px; align-items:flex-start; }
+  .task-row:last-child { border-bottom:none; }
+  .muted { opacity:.7; }
+</style>
+
+<div id="maintenanceRoot" data-intervention-id="{{ rowid or intervention_id or intervention.get('N°') if intervention is defined else 0 }}">
+  <!-- Bouton -->
+  <button id="btnOpenMaintenance" class="btn btn-outline-primary">
+    Saisir maintenance
+  </button>
+
+  <!-- Modal -->
+  <div id="maintenanceModal" class="modal" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <h5 class="modal-title">Importer maintenance (.rtf / Word XML)</h5>
+        <button type="button" class="btn-close" id="btnCloseMaintenance">×</button>
+      </div>
+
+      <div class="modal-body" style="padding: 12px 16px;">
+        <div class="mb-3">
+          <input type="file" id="maintenanceFile" accept=".rtf,.xml,.txt" class="input"/>
+        </div>
+
+        <div class="d-flex align-items-center" style="display:flex; gap:12px; align-items:center; margin-bottom:8px;">
+          <label style="display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="toggleAll">
+            <span>Tout cocher / décocher</span>
+          </label>
+          <span id="taskCounter" class="muted"></span>
+        </div>
+
+        <div id="tasksContainer" style="max-height:420px; overflow:auto; border:1px solid #ddd; border-radius:8px; padding:8px;">
+          <!-- items -->
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display:flex; gap:8px; justify-content:flex-end;">
+        <button id="btnCopySummary" class="btn btn-success">Copier le résumé</button>
+        <button id="btnCopyTSV" class="btn btn-secondary">Copier TSV (Sujet/Action)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const root     = document.getElementById('maintenanceRoot');
+  const modal    = document.getElementById('maintenanceModal');
+  const btnOpen  = document.getElementById('btnOpenMaintenance');
+  const btnClose = document.getElementById('btnCloseMaintenance');
+  const fileInp  = document.getElementById('maintenanceFile');
+  const tasksDiv = document.getElementById('tasksContainer');
+  const toggleAll= document.getElementById('toggleAll');
+  const counter  = document.getElementById('taskCounter');
+  const btnSum   = document.getElementById('btnCopySummary');
+  const btnTSV   = document.getElementById('btnCopyTSV');
+
+  // id d'intervention passé par data-attribute
+  const resp = await fetch('/maintenance/parse', { method: 'POST', body: fd });
+  const data = await resp.json();
+  items = data.items || data.tasks || [];   // <— IMPORTANT
+  renderItems(items);
+  
+
+
+  let items = []; // mix: {kind:'title', title:'...'} | {kind:'task', sujet:'...', action:'...'}
+
+  function open(){ modal.style.display='block'; modal.setAttribute('aria-hidden','false'); }
+  function close(){ modal.style.display='none'; modal.setAttribute('aria-hidden','true'); tasksDiv.innerHTML=''; fileInp.value=''; toggleAll.checked=false; counter.textContent=''; items=[]; }
+
+  btnOpen.addEventListener('click', open);
+  btnClose.addEventListener('click', close);
+  modal.addEventListener('click', (e)=>{ if(e.target === modal) close(); });
+
+  fileInp.addEventListener('change', async (e)=>{
+    const f = e.target.files?.[0];
+    if(!f) return;
+    const fd = new FormData(); fd.append('file', f);
+    tasksDiv.innerHTML = '<div class="muted">Lecture du fichier…</div>';
+    try{
+      const resp = await fetch(`/interventions/${interventionId}/maintenance/parse`, { method:'POST', body:fd });
+      if(!resp.ok){
+        const err = await resp.json().catch(()=>({detail:'Erreur inconnue'}));
+        throw new Error(err.detail || 'Erreur');
+      }
+      const data = await resp.json();
+      items = data.items || data.tasks || [];
+      renderItems(items);
+    }catch(err){
+      tasksDiv.innerHTML = `<div class="text-danger">⚠ ${err.message}</div>`;
+      items = [];
+    }
+  });
+
+  function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+  function renderItems(list){
+    if(!list.length){ tasksDiv.innerHTML = '<div class="muted">Aucun élément détecté.</div>'; counter.textContent=''; return; }
+    counter.textContent = `${list.length} élément(s) détecté(s)`;
+    tasksDiv.innerHTML = list.map((it, i)=>{
+      if(it.kind === 'title'){
+        return `<div class="task-title" data-kind="title" data-idx="${i}">${escapeHtml(it.title||'')}</div>`;
+      }
+      return `
+        <label class="task-row" data-kind="task">
+          <input type="checkbox" data-idx="${i}">
+          <div><strong>${escapeHtml(it.sujet||'')}</strong> — ${escapeHtml(it.action||'')}</div>
+        </label>`;
+    }).join('');
+  }
+
+  // cocher / décocher tout
+  toggleAll.addEventListener('change', (e)=>{
+    tasksDiv.querySelectorAll('label.task-row input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
+  });
+
+  // groupage pour le "résumé"
+  const cap = s => (s||'').trim().replace(/^(\p{L})/u, (m)=>m.toUpperCase());
+  function lastTitleBefore(idx){
+    for(let j=idx-1; j>=0; j--){
+      const it = items[j];
+      if (it && it.kind === 'title') return (it.title||'').trim();
+    }
+    return null; // Sans section
+  }
+
+  async function copyToClipboard(text, btn){
+    try{
+      await navigator.clipboard.writeText(text);
+    }catch{
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    } finally {
+      const old = btn.textContent; btn.textContent = 'Copié ✅'; setTimeout(()=> btn.textContent = old, 1200);
+    }
+  }
+
+  // Bouton "Copier le résumé" (groupé Titre → Action)
+  btnSum.addEventListener('click', async ()=>{
+    const checkedIdx = [...tasksDiv.querySelectorAll('label.task-row input[type="checkbox"]:checked')].map(cb=>Number(cb.dataset.idx));
+    const selected = checkedIdx.map(i=>({...items[i], _idx:i})).filter(it=>it && it.kind==='task' && (it.sujet||'').trim() && (it.action||'').trim());
+    if(!selected.length){ alert('Sélectionne au moins une tâche.'); return; }
+
+    const bySection = new Map();    // section -> Map(action -> [sujets])
+    const sectionOrder = [];        // ordre des sections
+    const actionOrders = new Map(); // section -> ordre des actions
+
+    for(const t of selected){
+      const sec = lastTitleBefore(t._idx) || 'Sans section';
+      if(!bySection.has(sec)){ bySection.set(sec, new Map()); sectionOrder.push(sec); actionOrders.set(sec, []); }
+      const act = cap(t.action);
+      const secMap = bySection.get(sec);
+      if(!secMap.has(act)){ secMap.set(act, []); actionOrders.get(sec).push(act); }
+      secMap.get(act).push(t.sujet.trim());
+    }
+
+    const lines = [];
+    for(const sec of sectionOrder){
+      if(sec !== 'Sans section') lines.push(`->${sec} :`);
+      const acts = actionOrders.get(sec) || [];
+      const secMap = bySection.get(sec);
+      for(const a of acts){
+        lines.push(`              ${a}`); // 14 espaces
+        for(const s of (secMap.get(a) || [])){
+          lines.push(s);
+        }
+      }
+    }
+    await copyToClipboard(lines.join("\n"), btnSum);
+  });
+
+  // Bouton "Copier TSV" (2 colonnes Sujet/Action)
+  btnTSV.addEventListener('click', async ()=>{
+    const rows = [['Sujet','Action']];
+    tasksDiv.querySelectorAll('label.task-row input[type="checkbox"]').forEach(cb=>{
+      if(cb.checked){
+        const t = items[Number(cb.dataset.idx)];
+        if(t && t.kind === 'task'){
+          rows.push([ t.sujet || '', t.action || '' ]);
+        }
+      }
+    });
+    if(rows.length === 1){ alert('Sélectionne au moins une tâche.'); return; }
+    const tsv = rows.map(r => r.map(v => (v||'').toString().replaceAll('\t',' ').replaceAll('\n',' ')).join('\t')).join('\n');
+    await copyToClipboard(tsv, btnTSV);
+  });
+
+})();
+</script>
